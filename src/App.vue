@@ -1,32 +1,7 @@
-<script setup>
-import { computed } from 'vue'
-import { useBoolean } from 'vue-hooks-plus'
-import { useRoute, useRouter } from 'vue-router'
-
-import { navigationItems } from './stores/app'
-
-const route = useRoute()
-const router = useRouter()
-// const appStore = useAppStore()
-const [drawerOpen, drawerActions] = useBoolean(true)
-
-const activePath = computed(() => route.path)
-
-function navigate(path) {
-  router.push(path)
-}
-</script>
-
 <template>
   <VApp>
-    <div class="min-h-screen bg-slate-200">
-      <VNavigationDrawer
-        v-model="drawerOpen"
-        color="transparent"
-        floating
-        border="0"
-        width="280"
-      >
+    <div class="min-h-screen bg-slate-200 w-full">
+      <VNavigationDrawer color="transparent" floating border="0" width="280" permanent>
         <div class="m-4 panel-card p-5">
           <div class="text-xs uppercase tracking-[0.25em] text-slate-400">
             Linya Admin
@@ -34,42 +9,64 @@ function navigate(path) {
         </div>
 
         <div class="mx-4 mt-4 space-y-3">
-          <button
-            v-for="item in navigationItems"
-            :key="item.to"
-            class="flex w-full items-center justify-between rounded-5 px-4 py-3 text-left transition"
-            :class="activePath === item.to ? 'bg-slate-900 text-white shadow-lg' : 'panel-card text-slate-700 hover:bg-white'"
-            @click="navigate(item.to)"
-          >
-            <span class="flex items-center gap-3">
-              <VIcon :icon="item.icon" />
-              <span class="font-medium">{{ item.label }}</span>
-            </span>
-            <span class="text-xs opacity-70">{{ item.short }}</span>
-          </button>
+          <RouterLink to="/preset" class="block">
+            <div class="flex items-center justify-between rounded-5 px-4 py-3 text-left transition" :class="$route.path === '/preset'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'panel-card text-slate-700 hover:bg-white'
+              ">
+              <span class="flex items-center gap-3">
+                <VIcon icon="mdi-tune-variant" />
+                <span class="font-medium">预设</span>
+              </span>
+            </div>
+          </RouterLink>
+
+          <RouterLink to="/template" class="block">
+            <div class="flex items-center justify-between rounded-5 px-4 py-3 text-left transition" :class="$route.path === '/template'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'panel-card text-slate-700 hover:bg-white'
+              ">
+              <span class="flex items-center gap-3">
+                <VIcon icon="mdi-table-search" />
+                <span class="font-medium">模板</span>
+              </span>
+            </div>
+          </RouterLink>
+
+          <RouterLink to="/create" class="block">
+            <div class="flex items-center justify-between rounded-5 px-4 py-3 text-left transition" :class="$route.path === '/create'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'panel-card text-slate-700 hover:bg-white'
+              ">
+              <span class="flex items-center gap-3">
+                <VIcon icon="mdi-pencil-box-outline" />
+                <span class="font-medium">创建</span>
+              </span>
+            </div>
+          </RouterLink>
+
+          <RouterLink to="/list" class="block">
+            <div class="flex items-center justify-between rounded-5 px-4 py-3 text-left transition" :class="$route.path === '/list'
+              ? 'bg-slate-900 text-white shadow-lg'
+              : 'panel-card text-slate-700 hover:bg-white'
+              ">
+              <span class="flex items-center gap-3">
+                <VIcon icon="mdi-file-document-multiple-outline" />
+                <span class="font-medium">列表</span>
+              </span>
+            </div>
+          </RouterLink>
         </div>
       </VNavigationDrawer>
 
-      <VAppBar
-        color="transparent"
-        flat
-        height="80"
-      >
-        <template #prepend>
-          <VBtn
-            icon="mdi-menu"
-            variant="text"
-            @click="drawerActions.toggle()"
-          />
-        </template>
-
+      <VAppBar color="transparent" flat height="80">
         <VAppBarTitle class="font-weight-bold text-slate-900">
-          {{ route.meta.title ?? '工作台' }}
+          Linya Admin
         </VAppBarTitle>
       </VAppBar>
 
-      <VMain class="w-full h-full">
-        <div class="mx-auto px-4 py-6 md:px-6 h-full w-full">
+      <VMain class="h-full w-full">
+        <div class="mx-auto h-full w-full pb-10 pt-2 px-4">
           <RouterView />
         </div>
       </VMain>
