@@ -1,9 +1,18 @@
-<script setup lang="ts">
-defineProps<{
-  title: string
-  description: string
-  eyebrow?: string
-}>()
+<script setup>
+defineProps({
+  title: {
+    type: String,
+    default: '',
+  },
+  description: {
+    type: String,
+    default: '',
+  },
+  eyebrow: {
+    type: String,
+    default: 'Workspace',
+  },
+})
 </script>
 
 <template>

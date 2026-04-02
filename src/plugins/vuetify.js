@@ -19,25 +19,4 @@ export const vuetify = createVuetify({
       },
     },
   },
-  defaults: {
-    VCard: {
-      rounded: 'xl',
-      elevation: 0,
-    },
-    VBtn: {
-      rounded: 'xl',
-    },
-    VTextField: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VSelect: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VTextarea: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-  },
 })

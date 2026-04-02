@@ -1,27 +1,25 @@
-<script setup lang="ts">
-import { storeToRefs } from 'pinia'
+<script setup>
 import { computed } from 'vue'
 import { useBoolean } from 'vue-hooks-plus'
 import { useRoute, useRouter } from 'vue-router'
 
-import { navigationItems, useAppStore } from './stores/app'
+import { navigationItems } from './stores/app'
 
 const route = useRoute()
 const router = useRouter()
-const appStore = useAppStore()
-const { projectName, workspaceStats } = storeToRefs(appStore)
+// const appStore = useAppStore()
 const [drawerOpen, drawerActions] = useBoolean(true)
 
 const activePath = computed(() => route.path)
 
-function navigate(path: string) {
+function navigate(path) {
   router.push(path)
 }
 </script>
 
 <template>
   <VApp>
-    <div class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,118,110,0.20),_transparent_35%),linear-gradient(180deg,_#fffdf8_0%,_#f5f7fb_100%)]">
+    <div class="min-h-screen bg-slate-200">
       <VNavigationDrawer
         v-model="drawerOpen"
         color="transparent"
@@ -70,8 +68,8 @@ function navigate(path: string) {
         </VAppBarTitle>
       </VAppBar>
 
-      <VMain>
-        <div class="mx-auto max-w-7xl px-4 pb-10 pt-2 md:px-6">
+      <VMain class="w-full h-full">
+        <div class="mx-auto px-4 py-6 md:px-6 h-full w-full">
           <RouterView />
         </div>
       </VMain>
