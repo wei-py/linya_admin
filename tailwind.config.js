@@ -1,7 +1,5 @@
-import type { Config } from 'tailwindcss'
-
 export default {
-  content: ['./index.html', './src/**/*.{vue,ts,tsx}'],
+  content: ['./index.html', './src/**/*.{vue,js,jsx}'],
   theme: {
     extend: {
       colors: {
@@ -15,4 +13,4 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config
+}

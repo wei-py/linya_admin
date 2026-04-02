@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
@@ -12,7 +13,6 @@ export default defineConfig({
     UnoCSS(),
     AutoImport({
       imports: ['vue', 'vue-router', 'pinia'],
-      dts: 'src/auto-imports.d.ts',
       vueTemplate: true,
     }),
   ],
