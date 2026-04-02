@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@unocss all;
+
+:root {
+  color: #0f172a;
+  background: #f5f7fb;
+  font-family: 'Avenir Next', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+}
+
+button {
+  border: 0;
+  background: transparent;
+}
