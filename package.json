@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "eslint . --fix",
+    "format": "prettier --write .",
     "tauri": "tauri",
     "tdev": "tauri dev",
     "tbuild": "tauri build"
@@ -33,6 +33,7 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9.36.0",
     "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
     "tailwindcss": "^3.4.17",
     "unocss": "^66.5.0",
     "vite": "^7.1.7",

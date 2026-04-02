@@ -2,24 +2,26 @@
 defineProps({
   title: {
     type: String,
-    default: '',
+    default: "",
   },
   description: {
     type: String,
-    default: '',
+    default: "",
   },
   eyebrow: {
     type: String,
-    default: 'Workspace',
+    default: "Workspace",
   },
 })
 </script>
 
 <template>
-  <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+  <div
+    class="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between"
+  >
     <div>
       <div class="text-xs uppercase tracking-[0.3em] text-teal-700/70">
-        {{ eyebrow ?? 'Workspace' }}
+        {{ eyebrow ?? "Workspace" }}
       </div>
       <h1 class="mt-2 text-3xl font-semibold text-slate-900">
         {{ title }}
@@ -28,8 +30,6 @@ defineProps({
         {{ description }}
       </p>
     </div>
-    <div class="rounded-full bg-teal-700 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-700/20">
-      Excel + Tauri Ready
-    </div>
+    <div class="status-pill">Excel + Tauri Ready</div>
   </div>
 </template>

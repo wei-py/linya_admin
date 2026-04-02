@@ -1,14 +1,14 @@
 export default {
-  content: ['./index.html', './src/**/*.{vue,js,jsx}'],
+  content: ["./index.html", "./src/**/*.{vue,js,jsx}"],
   theme: {
     extend: {
       colors: {
-        ink: '#0f172a',
-        mist: '#eef2ff',
-        pulse: '#16a34a',
+        ink: "#0f172a",
+        mist: "#eef2ff",
+        pulse: "#16a34a",
       },
       boxShadow: {
-        panel: '0 18px 50px rgba(15, 23, 42, 0.08)',
+        panel: "0 18px 50px rgba(15, 23, 42, 0.08)",
       },
     },
   },

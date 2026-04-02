@@ -1,23 +1,41 @@
-import antfu from '@antfu/eslint-config'
+import antfu from "@antfu/eslint-config"
 
 export default antfu(
   {
     vue: true,
-    ignores: ['dist', 'node_modules', 'src-tauri/gen', 'src-tauri/target'],
+    ignores: [
+      "dist",
+      "docs/**/*.md",
+      "node_modules",
+      "src-tauri/gen",
+      "src-tauri/target",
+    ],
     stylistic: {
-      quotes: 'single',
+      quotes: "double",
       semi: false,
     },
   },
   {
     rules: {
-      'vue/component-name-in-template-casing': [
-        'error',
-        'PascalCase',
+      "style/max-len": [
+        "error",
+        {
+          code: 80,
+          ignoreComments: true,
+          ignoreStrings: true,
+          ignoreTemplateLiterals: true,
+          ignoreUrls: true,
+        },
+      ],
+      "style/quotes": ["error", "double"],
+      "vue/component-name-in-template-casing": [
+        "error",
+        "PascalCase",
         {
           registeredComponentsOnly: false,
         },
       ],
+      "vue/singleline-html-element-content-newline": "off",
     },
   },
 )
