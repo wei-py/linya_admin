@@ -1,6 +1,6 @@
 <template>
   <VApp>
-    <div class="min-h-screen bg-slate-200 w-full">
+    <div class="h-screen w-full overflow-hidden bg-slate-200">
       <VNavigationDrawer
         color="transparent"
         floating
@@ -81,14 +81,8 @@
         </div>
       </VNavigationDrawer>
 
-      <VAppBar color="transparent" flat height="80">
-        <VAppBarTitle class="font-weight-bold text-slate-900">
-          Linya Admin
-        </VAppBarTitle>
-      </VAppBar>
-
-      <VMain class="h-full w-full">
-        <div class="mx-auto h-full w-full pb-10 pt-2 px-4">
+      <VMain class="h-full min-h-0 w-full">
+        <div class="mx-auto h-full min-h-0 w-full p-4">
           <RouterView />
         </div>
       </VMain>

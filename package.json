@@ -22,7 +22,8 @@
     "vue-hooks-plus": "^1.8.9",
     "vue-router": "^4.5.1",
     "vuetify": "^3.8.4",
-    "xe-utils": "^3.7.9"
+    "xe-utils": "^3.7.9",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.12.0",

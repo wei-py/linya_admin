@@ -45,3 +45,18 @@ button {
   color: #fff;
   box-shadow: 0 10px 24px rgb(15 118 110 / 0.2);
 }
+
+.debug-pre {
+  margin-top: 0.75rem;
+  overflow: auto;
+  border-radius: 0.75rem;
+  background: #020617;
+  padding: 1rem;
+  font-size: 0.75rem;
+  color: #f8fafc;
+}
+
+.import-btn-text {
+  display: inline-flex;
+  padding: 0 1rem;
+}
