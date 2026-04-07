@@ -129,7 +129,7 @@ const { activePreset, activePresetId } = storeToRefs(presetStore)
 作用：
 
 - 左侧列表高亮
-- 右侧详情区显示当前组合内容
+- 右侧子路由显示当前组合内容
 
 ## 本地缓存
 
@@ -141,11 +141,6 @@ const { activePreset, activePresetId } = storeToRefs(presetStore)
 - `preset:excelFileName`
 - `preset:excelFilePath`
 - `preset:activePresetId`
-
-同时保留了老版本兼容 key：
-
-- `preset:excelRows`
-- `preset:activeCountryPlatform`
 
 这样做的目的是：
 
@@ -171,8 +166,8 @@ store 启动时会先尝试从缓存恢复数据。
 
 逻辑顺序：
 
-1. 读新的 `preset:records`
-2. 如果没有，再读旧的 `preset:excelRows`
+1. 先清理历史遗留的无用 key
+2. 读当前使用的 `preset:records`
 3. 统一通过 `createPresetRecord()` 转成当前页面结构
 
 其中 `createPresetRecord()` 的作用是把旧格式和新格式都整理成统一对象：
@@ -237,6 +232,7 @@ store 启动时会先尝试从缓存恢复数据。
 处理内容：
 
 - 调用 store 的 `setActivePreset(item.id)`
+- 同步切换到 `/preset/:presetId` 子路由
 - `activePreset` 变化后自动回填 `baseInfo`
 - store 负责更新本地缓存
 
@@ -260,7 +256,17 @@ store 启动时会先尝试从缓存恢复数据。
 
 ### 右侧
 
-右侧当前是详情区，不是完整编辑区。
+右侧当前由子路由承载，不再直接写在 `PresetView.vue` 里。
+
+当前包括两个子路由组件：
+
+- [src/views/preset/PresetDetailView.vue](/Users/wx/Documents/learn/linya_admin/src/views/preset/PresetDetailView.vue)
+- [src/views/preset/PresetEmptyView.vue](/Users/wx/Documents/learn/linya_admin/src/views/preset/PresetEmptyView.vue)
+
+对应关系：
+
+- `/preset` 显示空状态页
+- `/preset/:presetId` 显示当前组合详情页
 
 当存在选中组合时，显示：
 

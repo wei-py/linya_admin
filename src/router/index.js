@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from "vue-router"
 
 import CreateView from "@/views/CreateView.vue"
 import ListView from "@/views/ListView.vue"
+import PresetDetailView from "@/views/preset/PresetDetailView.vue"
+import PresetEmptyView from "@/views/preset/PresetEmptyView.vue"
 import PresetView from "@/views/PresetView.vue"
 import TemplateView from "@/views/TemplateView.vue"
 
@@ -11,9 +13,22 @@ export const router = createRouter({
     { path: "/", redirect: "/preset" },
     {
       path: "/preset",
-      name: "preset",
       component: PresetView,
       meta: { title: "预设" },
+      children: [
+        {
+          path: "",
+          name: "preset",
+          component: PresetEmptyView,
+          meta: { title: "预设" },
+        },
+        {
+          path: ":presetId",
+          name: "preset-detail",
+          component: PresetDetailView,
+          meta: { title: "预设" },
+        },
+      ],
     },
     {
       path: "/template",
