@@ -1,3 +1,41 @@
+<script setup>
+import { onMounted, ref } from "vue"
+
+import { usePresetStore } from "@/stores/preset"
+import { isTauriApp, pickExcelFilePath } from "@/utils/tauri/excel-file"
+
+const fileInputRef = ref(null)
+const presetStore = usePresetStore()
+
+async function handleBind() {
+  if (isTauriApp()) {
+    const path = await pickExcelFilePath()
+
+    if (!path)
+      return
+
+    await presetStore.bindExcelFilePath(path)
+    return
+  }
+
+  fileInputRef.value?.click()
+}
+
+async function handleFileChange(event) {
+  const [file] = event.target.files ?? []
+
+  if (!file)
+    return
+
+  await presetStore.bindExcelFile(file)
+  event.target.value = ""
+}
+
+onMounted(async () => {
+  await presetStore.refreshBoundExcelFile()
+})
+</script>
+
 <template>
   <VApp>
     <div class="h-screen w-full overflow-hidden bg-slate-200">
@@ -5,7 +43,7 @@
         color="transparent"
         floating
         border="0"
-        width="280"
+        width="240"
         permanent
       >
         <div class="m-4 panel-card p-5">
@@ -79,10 +117,22 @@
             </div>
           </RouterLink>
         </div>
+        <div class="mx-4 mt-10">
+          <input
+            ref="fileInputRef"
+            class="hidden"
+            type="file"
+            accept=".xlsx,.xls"
+            @change="handleFileChange"
+          >
+          <VBtn class="w-full" variant="tonal" @click="handleBind">
+            {{ presetStore.excelFileName || "未绑定" }}
+          </VBtn>
+        </div>
       </VNavigationDrawer>
 
       <VMain class="h-full min-h-0 w-full">
-        <div class="mx-auto h-full min-h-0 w-full p-4">
+        <div class="mx-auto h-full min-h-0 w-full py-4 px-2">
           <RouterView />
         </div>
       </VMain>
