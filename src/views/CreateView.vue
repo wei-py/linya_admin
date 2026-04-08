@@ -181,6 +181,16 @@ function findPresetSnapshotNumber(name) {
   return toNumber(findPresetSnapshotValue(name))
 }
 
+function findPresetSnapshotUnit(name) {
+  return form.presetItems.find(item => item.name === name)?.unit || ""
+}
+
+function findPresetMoneyUnit() {
+  return form.presetItems.find(
+    item => item.unit && item.unit !== "%",
+  )?.unit || ""
+}
+
 const calculationSnapshot = computed(() => {
   const baseListPrice = toNumber(form.listPrice)
   const baseDiscountPrice = toNumber(form.discountPrice)
@@ -282,11 +292,11 @@ const calculationSnapshot = computed(() => {
 const calculationCards = computed(() => [
   {
     label: "收入",
-    value: formatNumber(calculationSnapshot.value.revenue, " R$"),
+    value: formatNumber(calculationSnapshot.value.revenue),
   },
   {
     label: "总费用",
-    value: formatNumber(calculationSnapshot.value.totalFee, " R$"),
+    value: formatNumber(calculationSnapshot.value.totalFee),
   },
   {
     label: "当前联动基准",
@@ -310,51 +320,103 @@ const calculationCards = computed(() => [
 const calculationDetails = computed(() => [
   {
     label: "折扣率",
-    value: formatNumber(calculationSnapshot.value.discountRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.discountRate,
+      findPresetSnapshotUnit("折扣")
+        ? ` ${findPresetSnapshotUnit("折扣")}`
+        : "",
+    ),
   },
   {
     label: "活动费率",
-    value: formatNumber(calculationSnapshot.value.activityRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.activityRate,
+      findPresetSnapshotUnit("活动费率")
+        ? ` ${findPresetSnapshotUnit("活动费率")}`
+        : "",
+    ),
   },
   {
     label: "交易费率",
-    value: formatNumber(calculationSnapshot.value.transactionRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.transactionRate,
+      findPresetSnapshotUnit("交易费率")
+        ? ` ${findPresetSnapshotUnit("交易费率")}`
+        : "",
+    ),
   },
   {
     label: "提现费率",
-    value: formatNumber(calculationSnapshot.value.withdrawRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.withdrawRate,
+      findPresetSnapshotUnit("提现费率")
+        ? ` ${findPresetSnapshotUnit("提现费率")}`
+        : "",
+    ),
   },
   {
     label: "汇损",
-    value: formatNumber(calculationSnapshot.value.exchangeLossRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.exchangeLossRate,
+      findPresetSnapshotUnit("汇损")
+        ? ` ${findPresetSnapshotUnit("汇损")}`
+        : "",
+    ),
   },
   {
     label: "税率",
-    value: formatNumber(calculationSnapshot.value.taxRate, "%"),
+    value: formatNumber(
+      calculationSnapshot.value.taxRate,
+      findPresetSnapshotUnit("税率")
+        ? ` ${findPresetSnapshotUnit("税率")}`
+        : "",
+    ),
   },
   {
     label: "活动费",
-    value: formatNumber(calculationSnapshot.value.activityFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.activityFee,
+      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+    ),
   },
   {
     label: "交易费",
-    value: formatNumber(calculationSnapshot.value.transactionFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.transactionFee,
+      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+    ),
   },
   {
     label: "提现费",
-    value: formatNumber(calculationSnapshot.value.withdrawFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.withdrawFee,
+      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+    ),
   },
   {
     label: "汇损金额",
-    value: formatNumber(calculationSnapshot.value.exchangeLossFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.exchangeLossFee,
+      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+    ),
   },
   {
     label: "税费",
-    value: formatNumber(calculationSnapshot.value.taxFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.taxFee,
+      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+    ),
   },
   {
     label: "贴单费用",
-    value: formatNumber(calculationSnapshot.value.labelFee, " R$"),
+    value: formatNumber(
+      calculationSnapshot.value.labelFee,
+      findPresetSnapshotUnit("贴单费用")
+        ? ` ${findPresetSnapshotUnit("贴单费用")}`
+        : findPresetMoneyUnit()
+          ? ` ${findPresetMoneyUnit()}`
+          : "",
+    ),
   },
 ])
 
@@ -490,7 +552,8 @@ function updateCalculationField(key, value) {
                     :model-value="item.value"
                     variant="outlined"
                     hide-details
-                    :placeholder="item.unit ? `输入${item.unit}` : '输入数值'"
+                    :suffix="item.unit || undefined"
+                    placeholder="输入数值"
                     @update:model-value="
                       (value) => updatePresetSnapshotItem(item, 'value', value)
                     "
