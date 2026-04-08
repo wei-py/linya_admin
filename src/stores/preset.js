@@ -1,5 +1,6 @@
 import { defineStore } from "pinia"
 
+import { defaultPresetItemTemplates } from "@/constants/preset"
 import {
   createCountryPlatformValue,
   exportPresetsToBytes,
@@ -27,6 +28,55 @@ const STALE_STORAGE_KEYS = [
 ]
 
 let hasInitializedPresetStorage = false
+let presetSyncTimer = null
+
+function createPresetItemId(presetId) {
+  return `${presetId}__item__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizePresetItemType(type) {
+  return type === "boolean" ? "boolean" : "number"
+}
+
+function createPresetItem(item, presetId, index) {
+  const nextPresetId = item?.preset_id || presetId || ""
+  const nextType = normalizePresetItemType(item?.type)
+  const nextValue
+    = nextType === "boolean"
+      ? ["是", "否"].includes(item?.value)
+          ? item.value
+          : ""
+      : String(item?.value ?? "")
+
+  return {
+    id: item?.id || createPresetItemId(nextPresetId),
+    preset_id: nextPresetId,
+    name: item?.name?.trim?.() || "",
+    type: nextType,
+    unit: item?.unit?.trim?.() || "",
+    value: nextValue,
+    sort: Number(item?.sort) || index + 1,
+  }
+}
+
+function resetPresetItemSorts(items) {
+  items.forEach((item, index) => {
+    item.sort = index + 1
+  })
+}
+
+function createDefaultPresetItems(presetId) {
+  return defaultPresetItemTemplates.map((item, index) =>
+    createPresetItem(
+      {
+        ...item,
+        preset_id: presetId,
+      },
+      presetId,
+      index,
+    ),
+  )
+}
 
 function createPresetRecord(item, index) {
   const country = item?.country?.trim?.() || ""
@@ -40,7 +90,11 @@ function createPresetRecord(item, index) {
     platform,
     country_platform,
     sort: Number(item?.sort) || index + 1,
-    items: Array.isArray(item?.items) ? item.items : [],
+    items: Array.isArray(item?.items)
+      ? item.items.map((presetItem, itemIndex) =>
+          createPresetItem(presetItem, item?.id || country_platform, itemIndex),
+        )
+      : [],
   }
 }
 
@@ -117,6 +171,25 @@ export const usePresetStore = defineStore("preset", {
   },
 
   actions: {
+    scheduleSyncBoundExcelFile(delay = 300) {
+      if (!isTauriApp() || !this.excelFilePath)
+        return
+
+      if (presetSyncTimer) {
+        clearTimeout(presetSyncTimer)
+      }
+
+      presetSyncTimer = window.setTimeout(() => {
+        presetSyncTimer = null
+        void this.syncBoundExcelFile()
+      }, delay)
+    },
+
+    persistPresetChanges() {
+      this.persistState()
+      this.scheduleSyncBoundExcelFile()
+    },
+
     persistState() {
       if (this.presetRecords.length) {
         localStorage.setItem(
@@ -269,6 +342,7 @@ export const usePresetStore = defineStore("preset", {
           platform,
           country_platform,
           sort: this.presetRecords.length + 1,
+          items: createDefaultPresetItems(country_platform),
         },
         this.presetRecords.length,
       )
@@ -306,6 +380,102 @@ export const usePresetStore = defineStore("preset", {
 
       this.persistState()
       await this.syncBoundExcelFile()
+
+      return true
+    },
+
+    addPresetItem(presetId = this.activePresetId) {
+      if (!presetId)
+        return null
+
+      const preset = this.presetRecords.find(item => item.id === presetId)
+
+      if (!preset)
+        return null
+
+      const nextItem = createPresetItem(
+        {
+          preset_id: preset.id,
+          type: "number",
+          value: "",
+          unit: "",
+        },
+        preset.id,
+        preset.items.length,
+      )
+
+      preset.items.push(nextItem)
+      resetPresetItemSorts(preset.items)
+      this.persistPresetChanges()
+
+      return nextItem
+    },
+
+    fillDefaultPresetItems(presetId = this.activePresetId) {
+      if (!presetId)
+        return false
+
+      const preset = this.presetRecords.find(item => item.id === presetId)
+
+      if (!preset || preset.items.length)
+        return false
+
+      preset.items = createDefaultPresetItems(preset.id)
+      resetPresetItemSorts(preset.items)
+      this.persistPresetChanges()
+
+      return true
+    },
+
+    updatePresetItem(presetId, itemId, patch = {}) {
+      if (!presetId || !itemId)
+        return false
+
+      const preset = this.presetRecords.find(item => item.id === presetId)
+
+      if (!preset)
+        return false
+
+      const target = preset.items.find(item => item.id === itemId)
+
+      if (!target)
+        return false
+
+      Object.assign(target, patch)
+
+      target.name = target.name?.trim?.() || ""
+      target.unit = target.unit?.trim?.() || ""
+      target.type = normalizePresetItemType(target.type)
+
+      if (target.type === "boolean") {
+        target.value = ["是", "否"].includes(target.value) ? target.value : ""
+      }
+      else {
+        target.value = String(target.value ?? "")
+      }
+
+      this.persistPresetChanges()
+
+      return true
+    },
+
+    removePresetItem(presetId, itemId) {
+      if (!presetId || !itemId)
+        return false
+
+      const preset = this.presetRecords.find(item => item.id === presetId)
+
+      if (!preset)
+        return false
+
+      const targetIndex = preset.items.findIndex(item => item.id === itemId)
+
+      if (targetIndex < 0)
+        return false
+
+      preset.items.splice(targetIndex, 1)
+      resetPresetItemSorts(preset.items)
+      this.persistPresetChanges()
 
       return true
     },

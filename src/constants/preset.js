@@ -71,3 +71,25 @@ export const platformOptions = [
   "Amazon",
   "Temu",
 ]
+
+export const presetItemTypeOptions = [
+  { title: "数值", value: "number" },
+  { title: "布尔值", value: "boolean" },
+]
+
+export const booleanValueOptions = [
+  { title: "是", value: "是" },
+  { title: "否", value: "否" },
+]
+
+export const defaultPresetItemTemplates = [
+  { name: "汇损", type: "number" },
+  { name: "活动费率", type: "number" },
+  { name: "折扣", type: "number" },
+  { name: "提现费率", type: "number" },
+  { name: "交易费率", type: "number" },
+  { name: "汇率", type: "number" },
+  { name: "税率", type: "number" },
+  { name: "贴单费用", type: "number" },
+  { name: "是否包邮", type: "boolean" },
+]
