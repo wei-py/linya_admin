@@ -17,6 +17,9 @@ const { templateTables } = storeToRefs(templateStore)
 
 const selectedPresetId = ref("")
 const extraProductFieldSeed = ref(1)
+const imageLinkSeed = ref(2)
+const variationGroupSeed = ref(1)
+const variationOptionSeed = ref(1)
 const calculationDriver = ref("listPrice")
 const isPresetEditorOpen = ref(false)
 
@@ -31,13 +34,19 @@ const form = reactive({
   sellerShipping: "",
   fixedSurcharge: "",
   styleNo: "",
-  image: "",
   cost: "",
   weight: "",
   category: "",
   adType: "",
   notes: "",
   presetItems: [],
+  imageLinks: [
+    {
+      id: "product_image_1",
+      value: "",
+    },
+  ],
+  variationGroups: [],
   extraProductFields: [],
 })
 
@@ -73,7 +82,7 @@ const presetSummaryFieldNames = [
   "是否包邮",
 ]
 const productPrimaryFieldKeys = ["styleNo", "cost", "weight", "category"]
-const productSecondaryFieldKeys = ["image", "adType"]
+const productSecondaryFieldKeys = ["adType"]
 const calculationTargetFieldKeys = [
   "listPrice",
   "discountPrice",
@@ -99,7 +108,7 @@ const visibleProductFieldCount = computed(
   () =>
     primaryProductFields.value.length
     + secondaryProductFields.value.length
-    + 1,
+    + 3,
 )
 
 const calculationDriverOptions = computed(() =>
@@ -174,6 +183,40 @@ function createExtraProductField() {
     id,
     label: "",
     value: "",
+  }
+}
+
+function createImageLink(value = "") {
+  const id = `product_image_${Date.now()}_${imageLinkSeed.value}`
+
+  imageLinkSeed.value += 1
+
+  return {
+    id,
+    value,
+  }
+}
+
+function createVariationOption(value = "") {
+  const id = `variation_option_${Date.now()}_${variationOptionSeed.value}`
+
+  variationOptionSeed.value += 1
+
+  return {
+    id,
+    value,
+  }
+}
+
+function createVariationGroup() {
+  const id = `variation_group_${Date.now()}_${variationGroupSeed.value}`
+
+  variationGroupSeed.value += 1
+
+  return {
+    id,
+    name: "",
+    options: [createVariationOption()],
   }
 }
 
@@ -283,6 +326,49 @@ function getPresetSnapshotRuleName(item) {
 
 function addExtraProductField() {
   form.extraProductFields.push(createExtraProductField())
+}
+
+function addImageLink() {
+  form.imageLinks.push(createImageLink())
+}
+
+function removeImageLink(id) {
+  if (form.imageLinks.length === 1) {
+    form.imageLinks[0].value = ""
+    return
+  }
+
+  form.imageLinks = form.imageLinks.filter(item => item.id !== id)
+}
+
+function addVariationGroup() {
+  form.variationGroups.push(createVariationGroup())
+}
+
+function removeVariationGroup(id) {
+  form.variationGroups = form.variationGroups.filter(item => item.id !== id)
+}
+
+function addVariationOption(groupId) {
+  const target = form.variationGroups.find(item => item.id === groupId)
+
+  if (!target)
+    return
+
+  target.options.push(createVariationOption())
+}
+
+function removeVariationOption(groupId, optionId) {
+  const target = form.variationGroups.find(item => item.id === groupId)
+
+  if (!target)
+    return
+
+  target.options = target.options.filter(item => item.id !== optionId)
+
+  if (!target.options.length) {
+    target.options = [createVariationOption()]
+  }
 }
 
 function removeExtraProductField(id) {
@@ -626,12 +712,12 @@ function setCalculationDriver(key) {
 
 <template>
   <div class="h-full min-h-0 overflow-y-auto pr-2">
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr),360px]">
+    <div class="workspace-page-grid">
       <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
         <div
           class="
-            flex flex-wrap gap-3 border-b border-[#c6c6c6] bg-[#f8f8f8]
-            px-5 py-4
+            flex flex-wrap gap-2 border-b border-[#c6c6c6] bg-[#f8f8f8]
+            px-4 py-3
           "
         >
           <div
@@ -681,12 +767,10 @@ function setCalculationDriver(key) {
         </div>
 
         <div>
-          <div class="flex items-center justify-between gap-4 px-5 py-4">
-            <div class="flex items-baseline gap-3">
-              <div class="text-base font-semibold text-[#161616]">
-                1. 选择预设
-              </div>
-              <div class="text-xs text-[#525252]">
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <div class="workspace-section-header">
+              <div class="workspace-section-title">1. 选择预设</div>
+              <div class="workspace-section-meta">
                 {{ form.presetItems.length }} 项
               </div>
             </div>
@@ -710,9 +794,9 @@ function setCalculationDriver(key) {
             </div>
           </div>
 
-          <div v-if="hasPresetRecords" class="grid gap-4 px-5 pb-4">
-            <div class="grid gap-3 lg:grid-cols-3">
-              <div class="surface-field">
+          <div v-if="hasPresetRecords" class="grid gap-3 px-4 pb-3">
+            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">预设组合</div>
                 <VAutocomplete
                   v-model="selectedPresetId"
@@ -725,7 +809,7 @@ function setCalculationDriver(key) {
                   density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">国家</div>
                 <VTextField
                   :model-value="form.country"
@@ -736,7 +820,7 @@ function setCalculationDriver(key) {
                   readonly
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">平台</div>
                 <VTextField
                   :model-value="form.platform"
@@ -749,27 +833,27 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="grid gap-3">
-              <div class="flex items-center justify-between gap-3">
-                <div class="text-sm font-medium text-[#161616]">关键参数</div>
-                <div class="text-xs text-[#525252]">
+            <div class="grid gap-2.5">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">关键参数</div>
+                <div class="workspace-subsection-meta">
                   {{ presetSummaryItems.length }}
                 </div>
               </div>
 
               <div
                 v-if="presetSummaryItems.length"
-                class="grid gap-3 md:grid-cols-3"
+                class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4"
               >
                 <div
                   v-for="item in presetSummaryItems"
                   :key="item.id"
-                  class="border border-[#e0e0e0] bg-[#f8f8f8] px-4 py-3"
+                  class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
                 >
                   <div class="text-xs text-[#525252]">
                     {{ item.label }}
                   </div>
-                  <div class="mt-1.5 text-[15px] font-medium text-[#161616]">
+                  <div class="mt-1 text-sm font-medium text-[#161616]">
                     {{ item.value }}
                   </div>
                 </div>
@@ -777,10 +861,7 @@ function setCalculationDriver(key) {
 
               <div
                 v-else
-                class="
-                  border border-dashed border-[#c6c6c6] bg-[#f8f8f8] px-4 py-3
-                  text-sm text-[#6f6f6f]
-                "
+                class="workspace-empty-state workspace-empty-state--tight"
               >
                 暂无关键参数。
               </div>
@@ -788,7 +869,7 @@ function setCalculationDriver(key) {
 
             <div
               v-if="isPresetEditorOpen && presetPrimaryItems.length"
-              class="grid gap-3 md:grid-cols-2"
+              class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4"
             >
               <div
                 v-for="item in presetPrimaryItems"
@@ -920,33 +1001,33 @@ function setCalculationDriver(key) {
 
           <div
             v-else
-            class="flex flex-col items-center justify-center gap-3 px-5 py-10"
+            class="workspace-panel-body"
           >
-            <div class="text-sm text-[#6f6f6f]">还没有预设组合。</div>
-            <RouterLink to="/preset">
-              <VBtn variant="tonal">去预设页</VBtn>
-            </RouterLink>
+            <div class="workspace-empty-state flex-col gap-3">
+              <div>还没有预设组合。</div>
+              <RouterLink to="/preset">
+                <VBtn variant="tonal" size="small" density="compact">去预设页</VBtn>
+              </RouterLink>
+            </div>
           </div>
         </div>
 
         <div class="border-t border-[#c6c6c6]">
-          <div class="flex items-center justify-between gap-4 px-5 py-4">
-            <div class="flex items-baseline gap-3">
-              <div class="text-base font-semibold text-[#161616]">
-                2. 核心商品信息
-              </div>
-              <div class="text-xs text-[#525252]">
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <div class="workspace-section-header">
+              <div class="workspace-section-title">2. 核心商品信息</div>
+              <div class="workspace-section-meta">
                 {{ visibleProductFieldCount }} 项
               </div>
             </div>
           </div>
 
-          <div class="grid gap-4 px-5 pb-4">
-            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-2">
+          <div class="grid gap-3 px-4 pb-3">
+            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
               <div
                 v-for="field in primaryProductFields"
                 :key="field.key"
-                class="surface-field"
+                class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
                 <VTextField
@@ -961,11 +1042,11 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-2">
+            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
               <div
                 v-for="field in secondaryProductFields"
                 :key="field.key"
-                class="surface-field"
+                class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
                 <VTextField
@@ -980,33 +1061,191 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="surface-field">
+            <div class="grid gap-2.5">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">图片链接</div>
+                <div class="flex items-center gap-3">
+                  <div class="workspace-subsection-meta">
+                    {{ form.imageLinks.length }}
+                  </div>
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    @click="addImageLink"
+                  >
+                    添加图片
+                  </VBtn>
+                </div>
+              </div>
+
+              <div class="grid gap-2.5">
+                <div
+                  v-for="(image, index) in form.imageLinks"
+                  :key="image.id"
+                  class="relative"
+                >
+                  <VBtn
+                    color="error"
+                    variant="text"
+                    size="small"
+                    density="compact"
+                    class="!absolute right-1 top-1 z-10 min-w-0 px-1.5"
+                    @click="removeImageLink(image.id)"
+                  >
+                    删除
+                  </VBtn>
+                  <div class="surface-field surface-field--compact pr-12">
+                    <div class="surface-field__label">
+                      图片链接 {{ index + 1 }}
+                    </div>
+                    <VTextField
+                      v-model="image.value"
+                      class="surface-field__control"
+                      placeholder="输入图片路径或 URL"
+                      variant="plain"
+                      hide-details
+                      density="compact"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid gap-2.5">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">变体</div>
+                <div class="flex items-center gap-3">
+                  <div class="workspace-subsection-meta">
+                    {{ form.variationGroups.length }}
+                  </div>
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    @click="addVariationGroup"
+                  >
+                    添加变体
+                  </VBtn>
+                </div>
+              </div>
+
+              <div
+                v-if="form.variationGroups.length"
+                class="grid gap-3"
+              >
+                <div
+                  v-for="(group, groupIndex) in form.variationGroups"
+                  :key="group.id"
+                  class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-sm font-semibold text-[#161616]">
+                      变体 {{ groupIndex + 1 }}
+                    </div>
+                    <VBtn
+                      color="error"
+                      variant="text"
+                      size="small"
+                      @click="removeVariationGroup(group.id)"
+                    >
+                      删除变体
+                    </VBtn>
+                  </div>
+
+                  <div class="mt-3 surface-field surface-field--compact">
+                    <div class="surface-field__label">变体名称</div>
+                    <VTextField
+                      v-model="group.name"
+                      class="surface-field__control"
+                      placeholder="例如 尺码 / 颜色"
+                      variant="plain"
+                      hide-details
+                      density="compact"
+                    />
+                  </div>
+
+                  <div class="mt-3 grid gap-2.5">
+                    <div class="workspace-subsection-header">
+                      <div class="workspace-subsection-title">选项</div>
+                      <VBtn
+                        variant="tonal"
+                        size="small"
+                        @click="addVariationOption(group.id)"
+                      >
+                        添加选项
+                      </VBtn>
+                    </div>
+
+                    <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+                      <div
+                        v-for="(option, optionIndex) in group.options"
+                        :key="option.id"
+                        class="relative"
+                      >
+                        <VBtn
+                          color="error"
+                          variant="text"
+                          size="small"
+                          density="compact"
+                          class="!absolute right-1 top-1 z-10 min-w-0 px-1.5"
+                          @click="removeVariationOption(group.id, option.id)"
+                        >
+                          删除
+                        </VBtn>
+                        <div class="surface-field surface-field--compact pr-12">
+                          <div class="surface-field__label">
+                            选项 {{ optionIndex + 1 }}
+                          </div>
+                          <VTextField
+                            v-model="option.value"
+                            class="surface-field__control"
+                            placeholder="例如 S / M / XL"
+                            variant="plain"
+                            hide-details
+                            density="compact"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="
+                  border border-dashed border-[#c6c6c6] bg-[#f8f8f8] px-3 py-2.5
+                  text-sm text-[#6f6f6f]
+                "
+              >
+                暂无变体，可按需添加。
+              </div>
+            </div>
+
+            <div class="surface-field surface-field--compact">
               <div class="surface-field__label">备注</div>
               <textarea
                 v-model="form.notes"
                 rows="3"
                 placeholder="补充内容"
-                class="surface-field__native min-h-[88px]"
+                class="surface-field__native min-h-[72px]"
               />
             </div>
           </div>
         </div>
 
         <div class="border-t border-[#c6c6c6]">
-          <div class="flex items-center justify-between gap-4 px-5 py-4">
-            <div class="flex items-baseline gap-3">
-              <div class="text-base font-semibold text-[#161616]">
-                3. 目标与费用
-              </div>
-              <div class="text-xs text-[#525252]">
+          <div class="flex items-center justify-between gap-4 px-4 py-3">
+            <div class="workspace-section-header">
+              <div class="workspace-section-title">3. 目标与费用</div>
+              <div class="workspace-section-meta">
                 {{ calculationDriverText }}
               </div>
             </div>
           </div>
 
-          <div class="grid gap-4 px-5 pb-4">
+          <div class="grid gap-3 px-4 pb-3">
             <div class="grid gap-2.5">
-              <div class="text-sm font-medium text-[#161616]">反推目标</div>
+              <div class="workspace-subsection-title">反推目标</div>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="field in calculationDriverOptions"
@@ -1036,7 +1275,7 @@ function setCalculationDriver(key) {
               v-if="activeCalculationField"
               class="grid gap-3 lg:grid-cols-2"
             >
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">
                   {{ activeCalculationField.label }}
                 </div>
@@ -1058,11 +1297,11 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="grid gap-3 lg:grid-cols-2">
+            <div class="grid gap-2.5 lg:grid-cols-2">
               <div
                 v-for="field in calculationCostFields"
                 :key="field.key"
-                class="surface-field"
+                class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
                 <VTextField
@@ -1083,25 +1322,25 @@ function setCalculationDriver(key) {
           </div>
         </div>
 
-        <details class="border-t border-[#e0e0e0] px-5">
+        <details class="border-t border-[#e0e0e0] px-4">
           <summary
             class="
               flex cursor-pointer list-none items-center justify-between gap-3
-              py-4 text-sm font-medium text-[#161616]
+              py-4
             "
           >
-            <span>补充字段</span>
-            <span class="text-xs text-[#525252]">
+            <span class="workspace-subsection-title">补充字段</span>
+            <span class="workspace-subsection-meta">
               {{ form.extraProductFields.length }}
             </span>
           </summary>
 
-          <div class="grid gap-4 pb-4">
-            <div class="grid gap-3">
-              <div class="flex items-center justify-between">
-                <div class="text-sm font-medium text-[#161616]">补充字段</div>
+          <div class="grid gap-3 pb-3">
+            <div class="grid gap-2.5">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">补充字段</div>
                 <div class="flex items-center gap-3">
-                  <div class="text-xs text-[#525252]">
+                  <div class="workspace-subsection-meta">
                     {{ form.extraProductFields.length }}
                   </div>
                   <VBtn
@@ -1165,10 +1404,7 @@ function setCalculationDriver(key) {
 
               <div
                 v-else
-                class="
-                  border border-dashed border-[#c6c6c6] bg-[#f8f8f8] px-4 py-3
-                  text-sm text-[#6f6f6f]
-                "
+                class="workspace-empty-state workspace-empty-state--tight"
               >
                 暂无补充字段。
               </div>
@@ -1177,39 +1413,46 @@ function setCalculationDriver(key) {
         </details>
       </VCard>
 
-      <div class="space-y-4 xl:sticky xl:top-4 xl:self-start">
+      <div class="workspace-sidebar">
         <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
-          <div class="border-b border-[#c6c6c6] px-5 py-4">
-            <div class="text-lg font-semibold text-[#161616]">结果</div>
+          <div class="workspace-panel-header">
+            <div class="workspace-panel-title">结果</div>
+            <div class="workspace-panel-meta">
+              {{
+                primaryResultHighlights.length
+                  + resultSummaryItems.length
+                  + feeSummaryItems.length
+              }} 项
+            </div>
           </div>
 
-          <div class="space-y-3 p-4">
+          <div class="workspace-panel-body space-y-3">
             <div class="space-y-3">
               <div
                 v-for="item in primaryResultHighlights"
                 :key="item.label"
                 class="
                   border border-[#c6c6c6] border-t-[2px] border-t-[#0f62fe]
-                  bg-[#f8f8f8] px-4 py-3
+                  bg-[#f8f8f8] px-3 py-2.5
                 "
               >
                 <div class="text-xs font-medium text-[#525252]">
                   {{ item.label }}
                 </div>
-                <div class="mt-2 text-[1.8rem] font-semibold text-[#161616]">
+                <div class="mt-1 text-[1.45rem] font-semibold text-[#161616]">
                   {{ item.value }}
                 </div>
               </div>
             </div>
 
-            <div class="border-t border-[#e0e0e0] pt-3.5">
+            <div class="border-t border-[#e0e0e0] pt-3">
               <div class="text-sm font-semibold text-[#161616]">概览</div>
               <dl class="mt-3">
                 <div
                   v-for="item in resultSummaryItems"
                   :key="item.label"
                   class="
-                    flex items-center justify-between gap-3 py-1.5 text-sm
+                    flex items-center justify-between gap-3 py-1 text-sm
                   "
                 >
                   <dt class="m-0 text-[#525252]">{{ item.label }}</dt>
@@ -1220,14 +1463,14 @@ function setCalculationDriver(key) {
               </dl>
             </div>
 
-            <div class="border-t border-[#e0e0e0] pt-3.5">
+            <div class="border-t border-[#e0e0e0] pt-3">
               <div class="text-sm font-semibold text-[#161616]">费用</div>
               <dl class="mt-3">
                 <div
                   v-for="item in feeSummaryItems"
                   :key="item.label"
                   class="
-                    flex items-center justify-between gap-3 py-1.5 text-sm
+                    flex items-center justify-between gap-3 py-1 text-sm
                   "
                 >
                   <dt class="m-0 text-[#525252]">{{ item.label }}</dt>

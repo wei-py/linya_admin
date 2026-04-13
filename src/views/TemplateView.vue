@@ -34,6 +34,18 @@ const selectedRuleMeta = computed(() =>
     ? templateRuleTypeMetaMap[selectedTable.value.ruleType]
     : null,
 )
+const templateBaseFieldCount = 7
+const templateRuleContentMetaText = computed(() => {
+  if (!selectedTable.value) {
+    return "0 项"
+  }
+
+  if (selectedTable.value.ruleType === "range_2d") {
+    return `${selectedTable.value.rows.length} 行 / ${selectedTable.value.columns.length} 列`
+  }
+
+  return `${selectedTable.value.rows.length} 行`
+})
 
 const isRange2DTable = computed(
   () => selectedTable.value?.ruleType === "range_2d",
@@ -77,6 +89,16 @@ function getTemplateTableClass(tableId) {
     "hover:border-[#8d8d8d]",
     "hover:bg-[#f8f8f8]",
   ]
+}
+
+function getTemplateTableSummary(table) {
+  const ruleTypeTitle = templateRuleTypeMetaMap[table.ruleType]?.title || "未设置类型"
+
+  if (table.ruleType === "range_2d") {
+    return `${ruleTypeTitle} · ${table.rows.length} 行 / ${table.columns.length} 列`
+  }
+
+  return `${ruleTypeTitle} · ${table.rows.length} 行`
 }
 
 function handleAddTable() {
@@ -185,115 +207,72 @@ watch(
 
 <template>
   <div class="h-full min-h-0 overflow-y-auto pr-2">
-    <div class="grid gap-4 xl:grid-cols-[320px,minmax(0,1fr)]">
-      <div class="space-y-4">
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
-          <div class="border-b border-[#c6c6c6] px-5 py-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-lg font-semibold text-[#161616]">规则表</div>
-              </div>
-              <VBtn
-                variant="tonal"
-                size="small"
-                :disabled="!hasExcelBinding"
-                @click="handleAddTable"
-              >
-                新建
-              </VBtn>
-            </div>
-          </div>
-
-          <div v-if="templateTables.length" class="space-y-3 p-4">
-            <button
-              v-for="table in templateTables"
-              :key="table.id"
-              type="button"
-              class="
-                w-full border px-4 py-3 text-left transition-colors
-                rounded-[2px]
-              "
-              :class="getTemplateTableClass(table.id)"
-              @click="templateStore.setActiveTable(table.id)"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-semibold">
-                    {{ table.name || "未命名规则表" }}
-                  </div>
-                </div>
-                <VBtn
-                  color="error"
-                  variant="text"
-                  size="small"
-                  density="comfortable"
-                  @click.stop="handleRemoveTable(table.id)"
-                >
-                  删除
-                </VBtn>
-              </div>
-            </button>
-          </div>
-          <div v-else class="px-5 py-8 text-sm text-[#6f6f6f]">
-            {{
-              hasExcelBinding
-                ? "当前 Excel 里还没有规则表。"
-                : "当前没有真实绑定 Excel。浏览器刷新后需要重新选择文件。"
-            }}
-          </div>
-        </VCard>
-
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
-          <div class="border-b border-[#c6c6c6] px-5 py-4">
-            <div class="text-lg font-semibold text-[#161616]">规则类型</div>
-            <!-- <div class="mt-1 text-sm text-slate-500">
-              第一版先只支持 5 种结构，后面都复用这套编辑器。
-            </div> -->
-          </div>
-
-          <div class="space-y-3 p-4">
-            <div
-              v-for="item in templateRuleTypeOptions"
-              :key="item.value"
-              class="border border-[#e0e0e0] bg-[#f8f8f8] p-4"
-            >
-              <div class="text-sm font-semibold text-[#161616]">
-                {{ item.title }}
-              </div>
-              <div class="mt-1 text-sm text-[#525252]">
-                {{ item.subtitle }}
-              </div>
-            </div>
-          </div>
-        </VCard>
-      </div>
-
+    <div class="workspace-page-grid">
       <div v-if="selectedTable" class="space-y-4">
         <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
-          <div class="border-b border-[#c6c6c6] px-5 py-4">
+          <div
+            class="
+              flex flex-wrap gap-2 border-b border-[#c6c6c6] bg-[#f8f8f8]
+              px-4 py-3
+            "
+          >
+            <div
+              class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+            >
+              <span
+                class="
+                  inline-flex h-5 w-5 items-center justify-center border
+                  border-[#c6c6c6] text-xs
+                "
+              >1</span>
+              <span>基础</span>
+            </div>
+            <div
+              class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+            >
+              <span
+                class="
+                  inline-flex h-5 w-5 items-center justify-center border
+                  border-[#c6c6c6] text-xs
+                "
+              >2</span>
+              <span>说明</span>
+            </div>
+            <div
+              class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+            >
+              <span
+                class="
+                  inline-flex h-5 w-5 items-center justify-center border
+                  border-[#c6c6c6] text-xs
+                "
+              >3</span>
+              <span>规则</span>
+            </div>
+          </div>
+
+          <div class="border-b border-[#c6c6c6] px-4 py-3">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <div class="text-lg font-semibold text-[#161616]">
-                  模板页
+                <div class="workspace-section-header">
+                  <div class="workspace-section-title">1. 基础信息</div>
+                  <div class="workspace-section-meta">
+                    {{ templateBaseFieldCount }} 项
+                  </div>
                 </div>
-                <div class="mt-1 text-sm text-[#525252]">
+                <div class="mt-0.5 text-sm text-[#525252]">
                   当前已改成从已绑定的 Excel 读取规则表，并同步回同一个文件。
                 </div>
               </div>
-              <div
-                class="
-                  inline-flex items-center border border-[#c6c6c6]
-                  bg-[#f4f4f4] px-3 py-1 text-xs font-medium text-[#525252]
-                "
-              >
+              <div class="workspace-badge">
                 {{ templateSyncStatusText }}
               </div>
             </div>
           </div>
 
-          <div class="space-y-4 p-5">
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="surface-field">
+          <div class="space-y-2.5 p-3.5">
+            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">规则表名称</div>
                 <VTextField
                   v-model="selectedTable.name"
@@ -301,9 +280,10 @@ watch(
                   placeholder="例如 巴西美客多佣金表"
                   variant="plain"
                   hide-details
+                  density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">规则类型</div>
                 <VSelect
                   :model-value="selectedTable.ruleType"
@@ -313,10 +293,11 @@ watch(
                   class="surface-field__control"
                   variant="plain"
                   hide-details
+                  density="compact"
                   @update:model-value="handleRuleTypeChange"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">国家</div>
                 <VAutocomplete
                   v-model="selectedTable.country"
@@ -324,10 +305,10 @@ watch(
                   class="surface-field__control"
                   variant="plain"
                   hide-details
-                  clearable
+                  density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">平台</div>
                 <VAutocomplete
                   v-model="selectedTable.platform"
@@ -335,10 +316,10 @@ watch(
                   class="surface-field__control"
                   variant="plain"
                   hide-details
-                  clearable
+                  density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">结果单位</div>
                 <VTextField
                   v-model="selectedTable.valueUnit"
@@ -346,9 +327,10 @@ watch(
                   placeholder="例如 % / R$"
                   variant="plain"
                   hide-details
+                  density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact xl:col-span-3">
                 <div class="surface-field__label">来源链接</div>
                 <VTextField
                   v-model="selectedTable.sourceUrl"
@@ -356,31 +338,32 @@ watch(
                   placeholder="例如 Mercado Livre 官方帮助页"
                   variant="plain"
                   hide-details
+                  density="compact"
                 />
               </div>
             </div>
 
-            <div class="surface-field">
+            <div class="surface-field surface-field--compact">
               <div class="surface-field__label">说明</div>
               <textarea
                 v-model="selectedTable.remark"
-                rows="4"
+                rows="2"
                 placeholder="记录这张规则表的来源、适用条件或维护备注"
-                class="surface-field__native min-h-[104px]"
+                class="surface-field__native min-h-[72px] text-sm leading-6"
               />
             </div>
 
             <div
               v-if="selectedRuleMeta"
-              class="border border-[#e0e0e0] bg-[#f8f8f8] p-4"
+              class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2"
             >
               <div class="text-sm font-semibold text-[#161616]">
                 {{ selectedRuleMeta.title }}
               </div>
-              <div class="mt-1 text-sm text-[#525252]">
+              <div class="mt-0.5 text-sm text-[#525252]">
                 {{ selectedRuleMeta.description }}
               </div>
-              <div class="mt-3 text-sm text-[#161616]">
+              <div class="mt-2 text-sm text-[#161616]">
                 预设引用方式：
                 <code
                   class="
@@ -395,13 +378,16 @@ watch(
         </VCard>
 
         <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
-          <div class="border-b border-[#c6c6c6] px-5 py-4">
+          <div class="border-b border-[#c6c6c6] px-4 py-3">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <div class="text-lg font-semibold text-[#161616]">
-                  {{ isRange2DTable ? "二维规则矩阵" : "规则行" }}
+                <div class="workspace-section-header">
+                  <div class="workspace-section-title">2. 规则内容</div>
+                  <div class="workspace-section-meta">
+                    {{ templateRuleContentMetaText }}
+                  </div>
                 </div>
-                <div class="mt-1 text-sm text-[#525252]">
+                <div class="mt-0.5 text-sm text-[#525252]">
                   {{
                     isRange2DTable
                       ? "横向是售价区间，纵向是重量区间，每个单元格表示命中的结果值。"
@@ -414,20 +400,26 @@ watch(
                   v-if="isRange2DTable"
                   variant="tonal"
                   size="small"
+                  density="compact"
                   @click="handleAddColumn"
                 >
                   添加本列
                 </VBtn>
-                <VBtn variant="tonal" size="small" @click="handleAddRow">
+                <VBtn
+                  variant="tonal"
+                  size="small"
+                  density="compact"
+                  @click="handleAddRow"
+                >
                   {{ isRange2DTable ? "添加本行" : "添加规则行" }}
                 </VBtn>
               </div>
             </div>
           </div>
 
-          <div v-if="isRange2DTable" class="space-y-4 p-5">
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="surface-field">
+          <div v-if="isRange2DTable" class="space-y-3 p-4">
+            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+              <div class="surface-field surface-field--compact xl:col-span-2">
                 <div class="surface-field__label">横轴名称</div>
                 <VTextField
                   v-model="selectedTable.xAxisLabel"
@@ -435,9 +427,10 @@ watch(
                   placeholder="例如 售价"
                   variant="plain"
                   hide-details
+                  density="compact"
                 />
               </div>
-              <div class="surface-field">
+              <div class="surface-field surface-field--compact xl:col-span-2">
                 <div class="surface-field__label">纵轴名称</div>
                 <VTextField
                   v-model="selectedTable.yAxisLabel"
@@ -445,6 +438,7 @@ watch(
                   placeholder="例如 重量"
                   variant="plain"
                   hide-details
+                  density="compact"
                 />
               </div>
             </div>
@@ -504,7 +498,8 @@ watch(
                         <VBtn
                           color="error"
                           variant="text"
-                          density="comfortable"
+                          size="small"
+                          density="compact"
                           @click="handleRemoveColumn(column.id)"
                         >
                           删除本列
@@ -548,7 +543,8 @@ watch(
                       <VBtn
                         color="error"
                         variant="text"
-                        density="comfortable"
+                        size="small"
+                        density="compact"
                         @click="handleRemoveRow(row.id)"
                       >
                         删除
@@ -560,7 +556,7 @@ watch(
             </div>
           </div>
 
-          <div v-else class="overflow-x-auto p-5">
+          <div v-else class="overflow-x-auto p-4">
             <div
               class="
                 overflow-hidden rounded-[2px] border border-[#c6c6c6]
@@ -608,7 +604,8 @@ watch(
                       <VBtn
                         color="error"
                         variant="text"
-                        density="comfortable"
+                        size="small"
+                        density="compact"
                         @click="handleRemoveRow(row.id)"
                       >
                         删除
@@ -622,14 +619,72 @@ watch(
         </VCard>
       </div>
 
-      <div v-else class="flex items-center justify-center p-10">
+      <VCard
+        v-else
+        class="overflow-hidden border border-[#c6c6c6] bg-white"
+      >
         <div
           class="
-            flex min-h-[240px] w-full items-center justify-center border
-            border-dashed border-[#c6c6c6] bg-[#f8f8f8] p-10
+            flex flex-wrap gap-2 border-b border-[#c6c6c6] bg-[#f8f8f8]
+            px-4 py-3
           "
         >
-          <div class="text-sm text-[#6f6f6f]">
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >1</span>
+            <span>基础</span>
+          </div>
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >2</span>
+            <span>说明</span>
+          </div>
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >3</span>
+            <span>规则</span>
+          </div>
+        </div>
+
+        <div class="border-b border-[#c6c6c6] px-4 py-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="workspace-section-header">
+                <div class="workspace-section-title">1. 基础信息</div>
+                <div class="workspace-section-meta">
+                  {{ templateBaseFieldCount }} 项
+                </div>
+              </div>
+              <div class="mt-0.5 text-sm text-[#525252]">
+                当前已改成从已绑定的 Excel 读取规则表，并同步回同一个文件。
+              </div>
+            </div>
+            <div class="workspace-badge">
+              {{ templateSyncStatusText }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-center p-6">
+          <div class="workspace-empty-state">
             {{
               hasExcelBinding
                 ? "当前 Excel 里还没有规则表，先新建一张模板表。"
@@ -637,6 +692,104 @@ watch(
             }}
           </div>
         </div>
+      </VCard>
+
+      <div class="workspace-sidebar">
+        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+          <div class="workspace-panel-header">
+            <div class="workspace-panel-title">规则表</div>
+            <div class="workspace-panel-meta">
+              {{ templateTables.length }} 项
+            </div>
+          </div>
+
+          <div class="workspace-panel-body space-y-3">
+            <div class="flex justify-end">
+              <VBtn
+                variant="tonal"
+                size="small"
+                density="compact"
+                :disabled="!hasExcelBinding"
+                @click="handleAddTable"
+              >
+                新建
+              </VBtn>
+            </div>
+
+            <div v-if="templateTables.length" class="space-y-2.5">
+              <button
+                v-for="table in templateTables"
+                :key="table.id"
+                type="button"
+                class="
+                  w-full rounded-[2px] border px-3 py-2.5 text-left
+                  transition-colors
+                "
+                :class="getTemplateTableClass(table.id)"
+                @click="templateStore.setActiveTable(table.id)"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm font-semibold">
+                      {{ table.name || "未命名规则表" }}
+                    </div>
+                    <div class="mt-1 text-xs text-[#525252]">
+                      {{ getTemplateTableSummary(table) }}
+                    </div>
+                    <div class="mt-1 text-xs text-[#525252]">
+                      {{ table.country || "未设置国家" }}
+                      /
+                      {{ table.platform || "未设置平台" }}
+                    </div>
+                  </div>
+                  <VBtn
+                    color="error"
+                    variant="text"
+                    size="small"
+                    density="compact"
+                    @click.stop="handleRemoveTable(table.id)"
+                  >
+                    删除
+                  </VBtn>
+                </div>
+              </button>
+            </div>
+
+            <div v-else>
+              <div class="workspace-empty-state workspace-empty-state--compact">
+                {{
+                  hasExcelBinding
+                    ? "当前 Excel 里还没有规则表。"
+                    : "当前没有真实绑定 Excel。浏览器刷新后需要重新选择文件。"
+                }}
+              </div>
+            </div>
+          </div>
+        </VCard>
+
+        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+          <div class="workspace-panel-header">
+            <div class="workspace-panel-title">规则类型</div>
+            <div class="workspace-panel-meta">
+              {{ templateRuleTypeOptions.length }} 类
+            </div>
+          </div>
+
+          <div class="workspace-panel-body space-y-2.5">
+            <div
+              v-for="item in templateRuleTypeOptions"
+              :key="item.value"
+              class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
+            >
+              <div class="text-sm font-semibold text-[#161616]">
+                {{ item.title }}
+              </div>
+              <div class="mt-1 text-sm text-[#525252]">
+                {{ item.subtitle }}
+              </div>
+            </div>
+          </div>
+        </VCard>
       </div>
     </div>
   </div>

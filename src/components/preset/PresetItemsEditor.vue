@@ -475,12 +475,12 @@ function saveRuleDialog() {
           :key="section.key"
           class="grid gap-3"
         >
-          <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="workspace-section-header">
             <div class="flex items-center gap-3">
-              <div class="text-base font-semibold text-[#161616]">
+              <div class="workspace-section-title">
                 {{ section.title }}
               </div>
-              <div class="text-xs text-[#525252]">
+              <div class="workspace-section-meta">
                 {{ section.items.length }} 项
               </div>
             </div>
@@ -651,19 +651,16 @@ function saveRuleDialog() {
 
           <div
             v-else
-            class="
-              flex items-center justify-center border border-dashed
-              border-[#c6c6c6] bg-[#f8f8f8] px-5 py-6 text-sm text-[#6f6f6f]
-            "
+            class="workspace-empty-state workspace-empty-state--compact"
           >
             {{ section.emptyText }}
           </div>
         </section>
       </div>
 
-      <div v-else class="py-10 text-center">
-        <div class="text-sm text-[#6f6f6f]">当前组合还没有参数项。</div>
-        <div class="mt-4 flex items-center justify-center gap-3">
+      <div v-else class="workspace-empty-state flex-col gap-4">
+        <div>当前组合还没有参数项。</div>
+        <div class="flex items-center justify-center gap-3">
           <VBtn variant="tonal" @click="handleFillDefaultPresetItems">
             补齐默认参数项
           </VBtn>

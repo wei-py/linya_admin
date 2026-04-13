@@ -26,20 +26,19 @@ const presetSummaryItems = computed(() => {
 </script>
 
 <template>
-  <div v-if="activePreset" class="h-full p-5">
-    <div class="border-b border-[#c6c6c6] pb-5">
-      <div class="text-xs font-medium tracking-[0.01em] text-[#525252]">
-        当前组合
+  <div v-if="activePreset" class="h-full p-4">
+    <div class="border-b border-[#c6c6c6] pb-4">
+      <div class="workspace-section-header">
+        <div class="workspace-section-title">1. 当前组合</div>
+        <div class="workspace-section-meta">
+          {{ activePreset.items.length }} 项
+        </div>
       </div>
-      <div
-        class="
-          mt-2 text-[1.75rem] font-semibold tracking-[-0.02em] text-[#161616]
-        "
-      >
+      <div class="mt-1.5 text-2xl font-semibold text-[#161616]">
         {{ activePreset.country_platform }}
       </div>
       <div
-        class="mt-3 flex flex-wrap items-center gap-2 text-sm text-[#525252]"
+        class="mt-2.5 flex flex-wrap items-center gap-2 text-sm text-[#525252]"
       >
         <span
           class="
@@ -58,20 +57,20 @@ const presetSummaryItems = computed(() => {
           {{ activePreset.platform || "未设置平台" }}
         </span>
       </div>
-      <div class="mt-4 grid gap-3 sm:grid-cols-3">
+      <div class="mt-3 grid gap-2.5 sm:grid-cols-3">
         <div
           v-for="item in presetSummaryItems"
           :key="item.label"
-          class="border border-[#e0e0e0] bg-[#f8f8f8] px-4 py-3"
+          class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
         >
           <div class="text-xs font-medium text-[#525252]">{{ item.label }}</div>
-          <div class="mt-2 text-xl font-semibold text-[#161616]">
+          <div class="mt-1.5 text-lg font-semibold text-[#161616]">
             {{ item.value }}
           </div>
         </div>
       </div>
     </div>
-    <div class="pt-5">
+    <div class="pt-4">
       <PresetItemsEditor />
     </div>
   </div>
