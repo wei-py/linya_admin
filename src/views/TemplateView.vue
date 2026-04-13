@@ -101,6 +101,36 @@ function getTemplateTableSummary(table) {
   return `${ruleTypeTitle} · ${table.rows.length} 行`
 }
 
+function getRuleTableColumnStyle(columnKey) {
+  if (["xMin", "xMax", "yMin", "yMax", "value"].includes(columnKey)) {
+    return { width: "136px" }
+  }
+
+  if (columnKey === "matchKey") {
+    return { width: "180px" }
+  }
+
+  return undefined
+}
+
+function getMatrixValueColumnStyle() {
+  const columnCount = selectedTable.value?.columns.length || 0
+
+  if (columnCount <= 3) {
+    return { width: "168px" }
+  }
+
+  if (columnCount <= 5) {
+    return { width: "148px" }
+  }
+
+  if (columnCount <= 7) {
+    return { width: "132px" }
+  }
+
+  return { width: "120px" }
+}
+
 function handleAddTable() {
   if (!hasExcelBinding.value)
     return
@@ -448,7 +478,16 @@ watch(
                 overflow-x-auto rounded-[2px] border border-[#c6c6c6]
               "
             >
-              <VTable density="compact" class="bg-white">
+              <VTable density="compact" class="w-full table-fixed bg-white">
+                <colgroup>
+                  <col style="width: 132px">
+                  <col
+                    v-for="column in selectedTable.columns"
+                    :key="column.id"
+                    :style="getMatrixValueColumnStyle()"
+                  >
+                  <col style="width: 88px">
+                </colgroup>
                 <thead>
                   <tr
                     class="
@@ -483,16 +522,14 @@ watch(
                     <th
                       v-for="column in selectedTable.columns"
                       :key="column.id"
-                      class="
-                        min-w-[160px] border-r border-[#c6c6c6] px-3 py-3
-                      "
+                      class="border-r border-[#c6c6c6] "
                     >
                       <VTextField
                         v-model="column.label"
                         variant="plain"
                         placeholder="区间上限"
                         hide-details
-                        density="comfortable"
+                        density="compact"
                       />
                       <div class="mt-2">
                         <VBtn
@@ -506,7 +543,7 @@ watch(
                         </VBtn>
                       </div>
                     </th>
-                    <th class="min-w-[92px] px-3 py-3 text-[#525252]">
+                    <th class=" text-[#525252]">
                       操作
                     </th>
                   </tr>
@@ -517,29 +554,29 @@ watch(
                     :key="row.id"
                     class="border-b border-[#e0e0e0] hover:bg-[#f8f8f8]"
                   >
-                    <td class="border-r border-[#e0e0e0] px-3 py-3">
+                    <td class="border-r border-[#e0e0e0] ">
                       <VTextField
                         v-model="row.label"
                         variant="plain"
                         placeholder="行区间上限"
                         hide-details
-                        density="comfortable"
+                        density="compact"
                       />
                     </td>
                     <td
                       v-for="column in selectedTable.columns"
                       :key="`${row.id}_${column.id}`"
-                      class="border-r border-[#e0e0e0] px-3 py-3"
+                      class="border-r border-[#e0e0e0] "
                     >
                       <VTextField
                         v-model="row.values[column.id]"
                         variant="plain"
                         placeholder="结果值"
                         hide-details
-                        density="comfortable"
+                        density="compact"
                       />
                     </td>
-                    <td class="px-3 py-3 text-right">
+                    <td class=" text-right">
                       <VBtn
                         color="error"
                         variant="text"
@@ -562,7 +599,15 @@ watch(
                 overflow-hidden rounded-[2px] border border-[#c6c6c6]
               "
             >
-              <VTable density="compact" class="bg-white">
+              <VTable density="compact" class="w-full table-fixed bg-white">
+                <colgroup>
+                  <col
+                    v-for="column in selectedRuleMeta?.columns || []"
+                    :key="column.key"
+                    :style="getRuleTableColumnStyle(column.key)"
+                  >
+                  <col style="width: 88px">
+                </colgroup>
                 <thead>
                   <tr
                     class="
@@ -573,11 +618,11 @@ watch(
                     <th
                       v-for="column in selectedRuleMeta?.columns || []"
                       :key="column.key"
-                      class="px-2 pb-2 font-medium"
+                      class="border-r px-3 py-2 font-medium"
                     >
                       {{ column.label }}
                     </th>
-                    <th class="px-2 pb-2 text-right font-medium">操作</th>
+                    <th class="px-2 py-2 text-center font-medium">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -589,7 +634,7 @@ watch(
                     <td
                       v-for="column in selectedRuleMeta?.columns || []"
                       :key="column.key"
-                      class="px-2"
+                      class="border-r px-3"
                     >
                       <VTextField
                         v-model="row[column.key]"
@@ -597,10 +642,10 @@ watch(
                         :placeholder="column.label"
                         variant="plain"
                         hide-details
-                        density="comfortable"
+                        density="compact"
                       />
                     </td>
-                    <td class="px-2 text-right align-middle">
+                    <td class="px-2 w-5 text-center align-middle">
                       <VBtn
                         color="error"
                         variant="text"

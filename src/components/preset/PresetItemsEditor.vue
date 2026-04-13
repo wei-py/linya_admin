@@ -556,7 +556,7 @@ function saveRuleDialog() {
                     <VTextField
                       :model-value="item.name"
                       variant="plain"
-                      density="comfortable"
+                      density="compact"
                       hide-details
                       @update:model-value="
                         value => handleNameChange(item, value)
@@ -570,7 +570,7 @@ function saveRuleDialog() {
                       item-title="title"
                       item-value="value"
                       variant="plain"
-                      density="comfortable"
+                      density="compact"
                       hide-details
                       @update:model-value="
                         value => handleTypeChange(item, value)
@@ -581,7 +581,7 @@ function saveRuleDialog() {
                     <VTextField
                       :model-value="item.unit"
                       variant="plain"
-                      density="comfortable"
+                      density="compact"
                       hide-details
                       @update:model-value="
                         value => handleUnitChange(item, value)
@@ -596,7 +596,7 @@ function saveRuleDialog() {
                       item-title="title"
                       item-value="value"
                       variant="plain"
-                      density="comfortable"
+                      density="compact"
                       hide-details
                       @update:model-value="
                         value => handleValueChange(item, value)
@@ -609,14 +609,14 @@ function saveRuleDialog() {
                       <VTextField
                         :model-value="getRuleDisplayValue(item)"
                         variant="plain"
-                        density="comfortable"
+                        density="compact"
                         hide-details
                         readonly
                       />
                       <VBtn
                         color="primary"
                         variant="text"
-                        density="comfortable"
+                        density="compact"
                         @click="openRuleDialog(item)"
                       >
                         配置规则
@@ -626,7 +626,7 @@ function saveRuleDialog() {
                       v-else
                       :model-value="item.value"
                       variant="plain"
-                      density="comfortable"
+                      density="compact"
                       hide-details
                       placeholder="输入数值"
                       @update:model-value="
@@ -638,7 +638,7 @@ function saveRuleDialog() {
                     <VBtn
                       color="error"
                       variant="text"
-                      density="comfortable"
+                      density="compact"
                       @click="handleRemovePresetItem(item)"
                     >
                       删除
