@@ -1,3 +1,5 @@
+import plugin from "tailwindcss/plugin"
+
 export default {
   content: ["./index.html", "./src/**/*.{vue,js,jsx}"],
   theme: {
@@ -12,5 +14,27 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    plugin(({ addUtilities }) => {
+      addUtilities({
+        ".bg-workspace-grid": {
+          backgroundColor: "#fff",
+          backgroundImage: `
+            linear-gradient(
+              to right,
+              rgba(198, 198, 198, 0.55) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              to bottom,
+              rgba(198, 198, 198, 0.55) 1px,
+              transparent 1px
+            )
+          `,
+          backgroundPosition: "top left",
+          backgroundSize: "32px 32px",
+        },
+      })
+    }),
+  ],
 }

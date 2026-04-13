@@ -239,7 +239,11 @@ watch(
   <div class="h-full min-h-0 overflow-y-auto pr-2">
     <div class="workspace-page-grid">
       <div v-if="selectedTable" class="space-y-4">
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+        <VCard
+          class="
+            workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+          "
+        >
           <div
             class="
               flex flex-wrap gap-2 border-b border-[#c6c6c6] bg-[#f8f8f8]
@@ -282,7 +286,7 @@ watch(
           </div>
 
           <div class="border-b border-[#c6c6c6] px-4 py-3">
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div class="workspace-section-header">
                   <div class="workspace-section-title">1. 基础信息</div>
@@ -301,7 +305,9 @@ watch(
           </div>
 
           <div class="space-y-2.5 p-3.5">
-            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+            >
               <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">规则表名称</div>
                 <VTextField
@@ -407,9 +413,13 @@ watch(
           </div>
         </VCard>
 
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+        <VCard
+          class="
+            workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+          "
+        >
           <div class="border-b border-[#c6c6c6] px-4 py-3">
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div class="workspace-section-header">
                   <div class="workspace-section-title">2. 规则内容</div>
@@ -425,7 +435,7 @@ watch(
                   }}
                 </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <VBtn
                   v-if="isRange2DTable"
                   variant="tonal"
@@ -448,7 +458,7 @@ watch(
           </div>
 
           <div v-if="isRange2DTable" class="space-y-3 p-4">
-            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <div class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
               <div class="surface-field surface-field--compact xl:col-span-2">
                 <div class="surface-field__label">横轴名称</div>
                 <VTextField
@@ -478,7 +488,10 @@ watch(
                 overflow-x-auto rounded-[2px] border border-[#c6c6c6]
               "
             >
-              <VTable density="compact" class="w-full table-fixed bg-white">
+              <VTable
+                density="compact"
+                class="w-max min-w-full table-fixed bg-white"
+              >
                 <colgroup>
                   <col style="width: 132px">
                   <col
@@ -608,7 +621,10 @@ watch(
                 overflow-hidden rounded-[2px] border border-[#c6c6c6]
               "
             >
-              <VTable density="compact" class="w-full table-fixed bg-white">
+              <VTable
+                density="compact"
+                class="w-max min-w-full table-fixed bg-white"
+              >
                 <colgroup>
                   <col
                     v-for="column in selectedRuleMeta?.columns || []"
@@ -686,7 +702,7 @@ watch(
 
       <VCard
         v-else
-        class="overflow-hidden border border-[#c6c6c6] bg-white"
+        class="workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white"
       >
         <div
           class="
@@ -730,7 +746,7 @@ watch(
         </div>
 
         <div class="border-b border-[#c6c6c6] px-4 py-3">
-          <div class="flex items-center justify-between gap-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="workspace-section-header">
                 <div class="workspace-section-title">1. 基础信息</div>
@@ -759,8 +775,12 @@ watch(
         </div>
       </VCard>
 
-      <div class="workspace-sidebar">
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+      <div class="workspace-sidebar workspace-sidebar--supporting">
+        <VCard
+          class="
+            workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+          "
+        >
           <div class="workspace-panel-header">
             <div class="workspace-panel-title">规则表</div>
             <div class="workspace-panel-meta">
@@ -768,8 +788,8 @@ watch(
             </div>
           </div>
 
-          <div class="workspace-panel-body space-y-3">
-            <div class="flex justify-end">
+          <div class="workspace-panel-body space-y-2.5">
+            <div class="flex justify-end sm:justify-start lg:justify-end">
               <VBtn
                 variant="tonal"
                 size="small"
@@ -781,14 +801,17 @@ watch(
               </VBtn>
             </div>
 
-            <div v-if="templateTables.length" class="space-y-2.5">
+            <div
+              v-if="templateTables.length"
+              class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1"
+            >
               <button
                 v-for="table in templateTables"
                 :key="table.id"
                 type="button"
                 class="
-                  w-full rounded-[2px] border px-3 py-2.5 text-left
-                  transition-colors
+                  w-full rounded-[2px] border px-3 py-2 text-left
+                  transition-colors lg:py-2.5
                 "
                 :class="getTemplateTableClass(table.id)"
                 @click="templateStore.setActiveTable(table.id)"
@@ -832,7 +855,11 @@ watch(
           </div>
         </VCard>
 
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+        <VCard
+          class="
+            workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+          "
+        >
           <div class="workspace-panel-header">
             <div class="workspace-panel-title">规则类型</div>
             <div class="workspace-panel-meta">
@@ -840,17 +867,19 @@ watch(
             </div>
           </div>
 
-          <div class="workspace-panel-body space-y-2.5">
-            <div
-              v-for="item in templateRuleTypeOptions"
-              :key="item.value"
-              class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
-            >
-              <div class="text-sm font-semibold text-[#161616]">
-                {{ item.title }}
-              </div>
-              <div class="mt-1 text-sm text-[#525252]">
-                {{ item.subtitle }}
+          <div class="workspace-panel-body">
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              <div
+                v-for="item in templateRuleTypeOptions"
+                :key="item.value"
+                class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
+              >
+                <div class="text-sm font-semibold text-[#161616]">
+                  {{ item.title }}
+                </div>
+                <div class="mt-1 text-sm text-[#525252]">
+                  {{ item.subtitle }}
+                </div>
               </div>
             </div>
           </div>

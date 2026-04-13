@@ -5,6 +5,7 @@
 
 :root {
   --linya-bg: #f4f4f4;
+  --linya-sheet: #ffffff;
   --linya-surface: #ffffff;
   --linya-surface-muted: #f8f8f8;
   --linya-border: #c6c6c6;
@@ -31,13 +32,17 @@ body,
 #app {
   min-height: 100%;
   margin: 0;
-  background: var(--linya-bg);
+  background-color: var(--linya-bg);
 }
 
 body {
   min-width: 320px;
   color: var(--linya-text);
   line-height: 1.5;
+}
+
+.workspace-stage {
+  background-color: var(--linya-bg);
 }
 
 button {
@@ -65,7 +70,7 @@ button {
 .v-application,
 .v-application__wrap,
 .v-main {
-  background: var(--linya-bg);
+  background-color: transparent !important;
 }
 
 .v-navigation-drawer {
@@ -233,6 +238,11 @@ button {
   white-space: nowrap;
 }
 
+.workspace-sheet {
+  background-color: var(--linya-sheet) !important;
+  background-image: none !important;
+}
+
 .workspace-panel-header {
   display: flex;
   align-items: center;
@@ -344,13 +354,60 @@ button {
   min-width: 0;
 }
 
-@media (min-width: 1280px) {
+.workspace-sidebar--supporting {
+  gap: 0.625rem;
+}
+
+@media (min-width: 1024px) {
   .workspace-page-grid {
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 
   .workspace-sidebar {
     position: sticky;
     top: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  .workspace-page-grid {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .workspace-sidebar--supporting .workspace-panel-header {
+    min-height: 3.25rem;
+    padding: 0.625rem 0.875rem;
+  }
+
+  .workspace-sidebar--supporting .workspace-panel-body {
+    padding: 0.875rem;
+  }
+
+  .workspace-sidebar--supporting .workspace-panel-body--compact {
+    padding: 0.625rem 0.875rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .workspace-panel-header,
+  .workspace-section-header,
+  .workspace-subsection-header {
+    flex-wrap: wrap;
+  }
+
+  .workspace-panel-header {
+    min-height: auto;
+    padding: 0.75rem 0.875rem;
+  }
+
+  .workspace-panel-body,
+  .workspace-panel-body--compact {
+    padding: 0.875rem;
+  }
+
+  .workspace-page-grid {
+    gap: 0.75rem;
   }
 }

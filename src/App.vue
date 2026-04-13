@@ -1,13 +1,39 @@
 <script setup>
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
+import { useRoute } from "vue-router"
+import { useDisplay } from "vuetify"
 
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
 import { isTauriApp, pickExcelFilePath } from "@/utils/tauri/excel-file"
 
 const fileInputRef = ref(null)
+const drawerOpen = ref(false)
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
+const route = useRoute()
+const { lgAndUp } = useDisplay()
+
+const currentPageTitle = computed(() =>
+  String(route.meta.title || "Linya Admin"),
+)
+
+watch(
+  lgAndUp,
+  (isDesktop) => {
+    drawerOpen.value = isDesktop
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!lgAndUp.value) {
+      drawerOpen.value = false
+    }
+  },
+)
 
 async function handleBind() {
   if (isTauriApp()) {
@@ -51,12 +77,37 @@ onMounted(async () => {
 
 <template>
   <VApp>
-    <div class="flex min-h-screen bg-[#f4f4f4]">
+    <VAppBar
+      v-if="!lgAndUp"
+      flat
+      height="56"
+      class="border-b border-[#c6c6c6] bg-white"
+    >
+      <VBtn
+        icon="mdi-menu"
+        variant="text"
+        @click="drawerOpen = true"
+      />
+      <VAppBarTitle class="text-base font-semibold text-[#161616]">
+        {{ currentPageTitle }}
+      </VAppBarTitle>
+      <div
+        v-if="presetStore.hasBoundExcelFile"
+        class="hidden sm:inline-flex workspace-badge mr-4"
+      >
+        已绑定 Excel
+      </div>
+    </VAppBar>
+
+    <div class="flex min-h-screen">
       <VNavigationDrawer
+        v-model="drawerOpen"
         class="border-r border-[#c6c6c6] bg-white"
         border="0"
         width="272"
-        permanent
+        :permanent="lgAndUp"
+        :temporary="!lgAndUp"
+        :scrim="!lgAndUp"
       >
         <div class="border-b border-[#c6c6c6] px-5 py-5">
           <div class="text-xs font-medium tracking-[0.01em] text-[#525252]">
@@ -199,8 +250,13 @@ onMounted(async () => {
         </div>
       </VNavigationDrawer>
 
-      <VMain class="min-h-screen min-w-0 w-full bg-[#f4f4f4]">
-        <div class="mx-auto min-h-screen w-full px-4 py-4 md:px-8 md:py-8">
+      <VMain class="min-h-screen min-w-0 w-full ">
+        <div
+          class="
+            workspace-stage mx-auto min-h-screen w-full px-4 py-4 sm:px-5
+            sm:py-5 lg:px-8 lg:py-6
+          "
+        >
           <RouterView />
         </div>
       </VMain>

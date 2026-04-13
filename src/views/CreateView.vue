@@ -713,7 +713,11 @@ function setCalculationDriver(key) {
 <template>
   <div class="h-full min-h-0 overflow-y-auto pr-2">
     <div class="workspace-page-grid">
-      <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+      <VCard
+        class="
+          workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+        "
+      >
         <div
           class="
             flex flex-wrap gap-2 border-b border-[#c6c6c6] bg-[#f8f8f8]
@@ -767,7 +771,11 @@ function setCalculationDriver(key) {
         </div>
 
         <div>
-          <div class="flex items-center justify-between gap-4 px-4 py-3">
+          <div
+            class="
+              flex flex-wrap items-start justify-between gap-3 px-4 py-3
+            "
+          >
             <div class="workspace-section-header">
               <div class="workspace-section-title">1. 选择预设</div>
               <div class="workspace-section-meta">
@@ -795,7 +803,9 @@ function setCalculationDriver(key) {
           </div>
 
           <div v-if="hasPresetRecords" class="grid gap-3 px-4 pb-3">
-            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+            >
               <div class="surface-field surface-field--compact">
                 <div class="surface-field__label">预设组合</div>
                 <VAutocomplete
@@ -843,7 +853,9 @@ function setCalculationDriver(key) {
 
               <div
                 v-if="presetSummaryItems.length"
-                class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4"
+                class="
+                  grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
+                "
               >
                 <div
                   v-for="item in presetSummaryItems"
@@ -869,7 +881,7 @@ function setCalculationDriver(key) {
 
             <div
               v-if="isPresetEditorOpen && presetPrimaryItems.length"
-              class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4"
+              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
             >
               <div
                 v-for="item in presetPrimaryItems"
@@ -1013,7 +1025,11 @@ function setCalculationDriver(key) {
         </div>
 
         <div class="border-t border-[#c6c6c6]">
-          <div class="flex items-center justify-between gap-4 px-4 py-3">
+          <div
+            class="
+              flex flex-wrap items-start justify-between gap-3 px-4 py-3
+            "
+          >
             <div class="workspace-section-header">
               <div class="workspace-section-title">2. 核心商品信息</div>
               <div class="workspace-section-meta">
@@ -1023,7 +1039,9 @@ function setCalculationDriver(key) {
           </div>
 
           <div class="grid gap-3 px-4 pb-3">
-            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+            >
               <div
                 v-for="field in primaryProductFields"
                 :key="field.key"
@@ -1042,7 +1060,9 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+            >
               <div
                 v-for="field in secondaryProductFields"
                 :key="field.key"
@@ -1175,7 +1195,12 @@ function setCalculationDriver(key) {
                       </VBtn>
                     </div>
 
-                    <div class="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+                    <div
+                      class="
+                        grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3
+                        2xl:grid-cols-4
+                      "
+                    >
                       <div
                         v-for="(option, optionIndex) in group.options"
                         :key="option.id"
@@ -1234,7 +1259,11 @@ function setCalculationDriver(key) {
         </div>
 
         <div class="border-t border-[#c6c6c6]">
-          <div class="flex items-center justify-between gap-4 px-4 py-3">
+          <div
+            class="
+              flex flex-wrap items-start justify-between gap-3 px-4 py-3
+            "
+          >
             <div class="workspace-section-header">
               <div class="workspace-section-title">3. 目标与费用</div>
               <div class="workspace-section-meta">
@@ -1297,7 +1326,7 @@ function setCalculationDriver(key) {
               </div>
             </div>
 
-            <div class="grid gap-2.5 lg:grid-cols-2">
+            <div class="grid gap-2.5 sm:grid-cols-2">
               <div
                 v-for="field in calculationCostFields"
                 :key="field.key"
@@ -1414,7 +1443,102 @@ function setCalculationDriver(key) {
       </VCard>
 
       <div class="workspace-sidebar">
-        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+        <VCard
+          class="
+            workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white
+            lg:hidden
+          "
+        >
+          <div class="workspace-panel-header">
+            <div class="workspace-panel-title">结果</div>
+            <div class="workspace-panel-meta">
+              {{
+                primaryResultHighlights.length
+                  + resultSummaryItems.length
+                  + feeSummaryItems.length
+              }} 项
+            </div>
+          </div>
+
+          <div class="workspace-panel-body space-y-3">
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div
+                v-for="item in primaryResultHighlights"
+                :key="item.label"
+                class="
+                  border border-[#c6c6c6] border-t-[2px] border-t-[#0f62fe]
+                  bg-[#f8f8f8] px-3 py-2
+                "
+              >
+                <div class="text-[11px] font-medium text-[#525252]">
+                  {{ item.label }}
+                </div>
+                <div class="mt-1 text-[1.15rem] font-semibold text-[#161616]">
+                  {{ item.value }}
+                </div>
+              </div>
+            </div>
+
+            <details class="border-t border-[#e0e0e0] pt-3">
+              <summary
+                class="
+                  flex cursor-pointer list-none items-center justify-between
+                  gap-3 text-sm font-medium text-[#161616]
+                "
+              >
+                <span>展开概览与费用</span>
+                <span class="text-xs text-[#525252]">
+                  {{ resultSummaryItems.length + feeSummaryItems.length }} 项
+                </span>
+              </summary>
+
+              <div class="mt-3 space-y-3">
+                <div class="border-t border-[#e0e0e0] pt-3">
+                  <div class="text-sm font-semibold text-[#161616]">概览</div>
+                  <dl class="mt-3">
+                    <div
+                      v-for="item in resultSummaryItems"
+                      :key="item.label"
+                      class="
+                        flex items-center justify-between gap-3 py-1 text-sm
+                      "
+                    >
+                      <dt class="m-0 text-[#525252]">{{ item.label }}</dt>
+                      <dd class="m-0 font-medium text-[#161616]">
+                        {{ item.value }}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div class="border-t border-[#e0e0e0] pt-3">
+                  <div class="text-sm font-semibold text-[#161616]">费用</div>
+                  <dl class="mt-3">
+                    <div
+                      v-for="item in feeSummaryItems"
+                      :key="item.label"
+                      class="
+                        flex items-center justify-between gap-3 py-1 text-sm
+                      "
+                    >
+                      <dt class="m-0 text-[#525252]">{{ item.label }}</dt>
+                      <dd class="m-0 font-medium text-[#161616]">
+                        {{ item.value }}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            </details>
+          </div>
+        </VCard>
+
+        <VCard
+          class="
+            workspace-sheet hidden overflow-hidden border border-[#c6c6c6]
+            bg-white lg:block
+          "
+        >
           <div class="workspace-panel-header">
             <div class="workspace-panel-title">结果</div>
             <div class="workspace-panel-meta">

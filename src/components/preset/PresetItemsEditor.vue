@@ -496,10 +496,14 @@ function saveRuleDialog() {
           <div
             v-if="section.items.length"
             class="
-              overflow-hidden rounded-[2px] border border-[#c6c6c6]
+              overflow-x-auto rounded-[2px] border border-[#c6c6c6]
             "
           >
-            <VTable density="compact" hover class="bg-white">
+            <VTable
+              density="compact"
+              hover
+              class="min-w-[820px] w-full bg-white"
+            >
               <thead>
                 <tr class="bg-[#f4f4f4]">
                   <th
