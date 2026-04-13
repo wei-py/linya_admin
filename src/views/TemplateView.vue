@@ -486,7 +486,7 @@ watch(
                     :key="column.id"
                     :style="getMatrixValueColumnStyle()"
                   >
-                  <col style="width: 88px">
+                  <col style="width: 72px">
                 </colgroup>
                 <thead>
                   <tr
@@ -543,7 +543,11 @@ watch(
                         </VBtn>
                       </div>
                     </th>
-                    <th class=" text-[#525252]">
+                    <th
+                      class="
+                        px-1 py-2 text-center text-[#525252]
+                      "
+                    >
                       操作
                     </th>
                   </tr>
@@ -576,12 +580,17 @@ watch(
                         density="compact"
                       />
                     </td>
-                    <td class=" text-right">
+                    <td
+                      class="
+                        px-1 text-center align-middle
+                      "
+                    >
                       <VBtn
                         color="error"
                         variant="text"
                         size="small"
                         density="compact"
+                        class="min-w-0 px-1 text-xs"
                         @click="handleRemoveRow(row.id)"
                       >
                         删除
@@ -606,7 +615,7 @@ watch(
                     :key="column.key"
                     :style="getRuleTableColumnStyle(column.key)"
                   >
-                  <col style="width: 88px">
+                  <col style="width: 72px">
                 </colgroup>
                 <thead>
                   <tr
@@ -622,7 +631,13 @@ watch(
                     >
                       {{ column.label }}
                     </th>
-                    <th class="px-2 py-2 text-center font-medium">操作</th>
+                    <th
+                      class="
+                        px-1 py-2 text-center font-medium
+                      "
+                    >
+                      操作
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -645,12 +660,17 @@ watch(
                         density="compact"
                       />
                     </td>
-                    <td class="px-2 w-5 text-center align-middle">
+                    <td
+                      class="
+                        px-1 text-center align-middle
+                      "
+                    >
                       <VBtn
                         color="error"
                         variant="text"
                         size="small"
                         density="compact"
+                        class="min-w-0 px-1 text-xs"
                         @click="handleRemoveRow(row.id)"
                       >
                         删除

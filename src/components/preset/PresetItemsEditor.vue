@@ -504,34 +504,48 @@ function saveRuleDialog() {
                 <tr class="bg-[#f4f4f4]">
                   <th
                     class="
-                      w-24 text-center text-xs font-semibold text-[#525252]
+                      w-24 border-r border-[#c6c6c6] text-center text-xs
+                      font-semibold text-[#525252]
                     "
                   >
                     序号
                   </th>
                   <th
                     class="
-                      min-w-[180px] text-xs font-semibold text-[#525252]
+                      min-w-[180px] border-r border-[#c6c6c6] text-xs
+                      font-semibold text-[#525252]
                     "
                   >
                     参数名称
                   </th>
-                  <th class="w-[120px] text-xs font-semibold text-[#525252]">
+                  <th
+                    class="
+                      w-[120px] border-r border-[#c6c6c6] text-xs font-semibold
+                      text-[#525252]
+                    "
+                  >
                     类型
                   </th>
-                  <th class="w-[120px] text-xs font-semibold text-[#525252]">
+                  <th
+                    class="
+                      w-[120px] border-r border-[#c6c6c6] text-xs font-semibold
+                      text-[#525252]
+                    "
+                  >
                     单位
                   </th>
                   <th
                     class="
-                      min-w-[240px] text-xs font-semibold text-[#525252]
+                      min-w-[240px] border-r border-[#c6c6c6] text-xs
+                      font-semibold text-[#525252]
                     "
                   >
                     值 / 规则
                   </th>
                   <th
                     class="
-                      w-[88px] text-right text-xs font-semibold text-[#525252]
+                      w-[88px] text-center text-xs font-semibold
+                      text-[#525252]
                     "
                   >
                     操作
@@ -545,14 +559,18 @@ function saveRuleDialog() {
                   :key="item.id"
                   class="transition-colors hover:bg-[#f8f8f8]"
                 >
-                  <td class="px-4 text-center align-middle">
+                  <td
+                    class="
+                      border-r border-[#e0e0e0] px-4 text-center align-middle
+                    "
+                  >
                     <span
                       class="text-xs font-medium tabular-nums text-[#525252]"
                     >
                       {{ getPresetItemIndex(item.id) }}
                     </span>
                   </td>
-                  <td class="align-middle">
+                  <td class="border-r border-[#e0e0e0] align-middle">
                     <VTextField
                       :model-value="item.name"
                       variant="plain"
@@ -563,7 +581,7 @@ function saveRuleDialog() {
                       "
                     />
                   </td>
-                  <td class="align-middle">
+                  <td class="border-r border-[#e0e0e0] align-middle">
                     <VSelect
                       :model-value="item.type"
                       :items="presetItemTypeOptions"
@@ -577,7 +595,7 @@ function saveRuleDialog() {
                       "
                     />
                   </td>
-                  <td class="align-middle">
+                  <td class="border-r border-[#e0e0e0] align-middle">
                     <VTextField
                       :model-value="item.unit"
                       variant="plain"
@@ -588,7 +606,7 @@ function saveRuleDialog() {
                       "
                     />
                   </td>
-                  <td class="align-middle">
+                  <td class="border-r border-[#e0e0e0] align-middle">
                     <VSelect
                       v-if="item.type === 'boolean'"
                       :model-value="item.value"
@@ -634,7 +652,11 @@ function saveRuleDialog() {
                       "
                     />
                   </td>
-                  <td class="text-right align-middle">
+                  <td
+                    class="
+                      text-center align-middle
+                    "
+                  >
                     <VBtn
                       color="error"
                       variant="text"
