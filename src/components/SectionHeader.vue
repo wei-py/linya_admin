@@ -12,24 +12,46 @@ defineProps({
     type: String,
     default: "Workspace",
   },
+  status: {
+    type: String,
+    default: "",
+  },
 })
 </script>
 
 <template>
   <div
-    class="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between"
+    class="
+      mb-6 flex flex-col gap-4 border-b border-[#c6c6c6] pb-5 md:flex-row
+      md:items-end md:justify-between
+    "
   >
     <div>
-      <div class="text-xs uppercase tracking-[0.3em] text-teal-700/70">
+      <div class="text-xs font-medium tracking-[0.01em] text-[#525252]">
         {{ eyebrow ?? "Workspace" }}
       </div>
-      <h1 class="mt-2 text-3xl font-semibold text-slate-900">
+      <h1
+        class="
+          mt-2 text-[1.75rem] font-semibold tracking-[-0.02em] text-[#161616]
+        "
+      >
         {{ title }}
       </h1>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+      <p
+        v-if="description"
+        class="mt-2 max-w-3xl text-sm leading-6 text-[#525252]"
+      >
         {{ description }}
       </p>
     </div>
-    <div class="status-pill">Excel + Tauri Ready</div>
+    <div
+      v-if="status"
+      class="
+        inline-flex items-center border border-[#c6c6c6] bg-[#f4f4f4] px-3
+        py-1 text-xs font-medium text-[#525252]
+      "
+    >
+      {{ status }}
+    </div>
   </div>
 </template>

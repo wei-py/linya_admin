@@ -18,17 +18,20 @@ export default defineConfig({
   ],
   theme: {
     colors: {
-      brand: "#0f766e",
-      accent: "#f97316",
-      surface: "#fffdf8",
+      brand: "#0f62fe",
+      accent: "#525252",
+      surface: "#ffffff",
+      canvas: "#f4f4f4",
+      border: "#c6c6c6",
+      text: "#161616",
     },
   },
   shortcuts: {
-    "panel-card": "rounded-6 bg-white/88 shadow-panel backdrop-blur-md",
+    "panel-card": "rounded-[4px] border border-border bg-surface shadow-none",
     "panel-grid": "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
     "section-shell":
-      "flex items-center justify-between rounded-5 px-4 py-3 text-left transition",
+      "flex items-center justify-between px-4 py-3 text-left transition-colors",
     "status-pill":
-      "rounded-full bg-teal-700 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-teal-700/20",
+      "inline-flex items-center rounded-full border border-border bg-canvas px-3 py-1 text-xs font-medium text-[#525252]",
   },
 })

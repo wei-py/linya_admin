@@ -2,11 +2,20 @@ import { defineStore } from "pinia"
 
 import { defaultPresetItemTemplates } from "@/constants/preset"
 import {
+  exportWorkbookToBytes,
+  readWorkbookFromBytes,
+} from "@/utils/excel/workbook"
+import {
   createCountryPlatformValue,
-  exportPresetsToBytes,
   importPresetsFromBytes,
   importPresetsFromExcel,
+  writePresetWorkbook,
 } from "@/utils/preset/excel"
+import {
+  createDefaultRuleConfig,
+  normalizePresetRuleMode,
+  parseRuleConfig,
+} from "@/utils/preset/rule-config"
 import {
   isTauriApp,
   readBinaryFile,
@@ -35,12 +44,19 @@ function createPresetItemId(presetId) {
 }
 
 function normalizePresetItemType(type) {
-  return type === "boolean" ? "boolean" : "number"
+  if (type === "boolean")
+    return "boolean"
+
+  if (type === "rule")
+    return "rule"
+
+  return "number"
 }
 
 function createPresetItem(item, presetId, index) {
   const nextPresetId = item?.preset_id || presetId || ""
   const nextType = normalizePresetItemType(item?.type)
+  const nextRuleMode = normalizePresetRuleMode(item?.rule_mode)
   const nextValue
     = nextType === "boolean"
       ? ["是", "否"].includes(item?.value)
@@ -55,6 +71,12 @@ function createPresetItem(item, presetId, index) {
     type: nextType,
     unit: item?.unit?.trim?.() || "",
     value: nextValue,
+    rule_mode: nextType === "rule" ? nextRuleMode : "",
+    rule_table_id: item?.rule_table_id?.trim?.() || "",
+    rule_config:
+      nextType === "rule"
+        ? parseRuleConfig(item?.rule_config, nextRuleMode)
+        : createDefaultRuleConfig(),
     sort: Number(item?.sort) || index + 1,
   }
 }
@@ -162,6 +184,10 @@ export const usePresetStore = defineStore("preset", {
   }),
 
   getters: {
+    hasBoundExcelFile(state) {
+      return Boolean(state.excelFilePath || state.excelFile)
+    },
+
     activePreset(state) {
       return (
         state.presetRecords.find(item => item.id === state.activePresetId)
@@ -298,7 +324,10 @@ export const usePresetStore = defineStore("preset", {
       try {
         this.syncStatus = "saving"
         this.syncErrorMessage = ""
-        const bytes = exportPresetsToBytes(this.presetRecords)
+        const currentBytes = await readBinaryFile(this.excelFilePath)
+        const workbook = readWorkbookFromBytes(currentBytes)
+        const nextWorkbook = writePresetWorkbook(workbook, this.presetRecords)
+        const bytes = exportWorkbookToBytes(nextWorkbook)
 
         await writeBinaryFile(this.excelFilePath, bytes)
 
@@ -399,6 +428,9 @@ export const usePresetStore = defineStore("preset", {
           type: "number",
           value: "",
           unit: "",
+          rule_mode: "",
+          rule_table_id: "",
+          rule_config: createDefaultRuleConfig(),
         },
         preset.id,
         preset.items.length,
@@ -446,12 +478,27 @@ export const usePresetStore = defineStore("preset", {
       target.name = target.name?.trim?.() || ""
       target.unit = target.unit?.trim?.() || ""
       target.type = normalizePresetItemType(target.type)
+      target.rule_table_id = target.rule_table_id?.trim?.() || ""
 
       if (target.type === "boolean") {
         target.value = ["是", "否"].includes(target.value) ? target.value : ""
+        target.rule_mode = ""
+        target.rule_table_id = ""
+        target.rule_config = createDefaultRuleConfig()
+      }
+      else if (target.type === "rule") {
+        target.value = String(target.value ?? "")
+        target.rule_mode = normalizePresetRuleMode(target.rule_mode)
+        target.rule_config = parseRuleConfig(
+          target.rule_config,
+          target.rule_mode,
+        )
       }
       else {
         target.value = String(target.value ?? "")
+        target.rule_mode = ""
+        target.rule_table_id = ""
+        target.rule_config = createDefaultRuleConfig()
       }
 
       this.persistPresetChanges()

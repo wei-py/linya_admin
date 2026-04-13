@@ -8,13 +8,17 @@ import {
 } from "@/constants/create"
 import { booleanValueOptions } from "@/constants/preset"
 import { usePresetStore } from "@/stores/preset"
+import { useTemplateStore } from "@/stores/template"
 
 const presetStore = usePresetStore()
+const templateStore = useTemplateStore()
 const { activePresetId, presetRecords } = storeToRefs(presetStore)
+const { templateTables } = storeToRefs(templateStore)
 
 const selectedPresetId = ref("")
 const extraProductFieldSeed = ref(1)
 const calculationDriver = ref("listPrice")
+const isPresetEditorOpen = ref(false)
 
 const form = reactive({
   country: "",
@@ -50,6 +54,116 @@ const selectedPresetRecord = computed(() =>
 )
 
 const hasPresetRecords = computed(() => presetRecords.value.length > 0)
+const presetPrimaryFieldNames = [
+  "折扣",
+  "活动费率",
+  "交易费率",
+  "提现费率",
+  "税率",
+  "贴单费用",
+  "是否包邮",
+  "汇损",
+]
+const presetSummaryFieldNames = [
+  "折扣",
+  "活动费率",
+  "交易费率",
+  "税率",
+  "贴单费用",
+  "是否包邮",
+]
+const productPrimaryFieldKeys = ["styleNo", "cost", "weight", "category"]
+const productSecondaryFieldKeys = ["image", "adType"]
+const calculationTargetFieldKeys = [
+  "listPrice",
+  "discountPrice",
+  "revenue",
+  "profitRate",
+  "netProfit",
+]
+const calculationCostFieldKeys = ["sellerShipping", "fixedSurcharge"]
+
+const primaryProductFields = computed(() =>
+  createProductBaseFields.filter(field =>
+    productPrimaryFieldKeys.includes(field.key),
+  ),
+)
+
+const secondaryProductFields = computed(() =>
+  createProductBaseFields.filter(field =>
+    productSecondaryFieldKeys.includes(field.key),
+  ),
+)
+
+const visibleProductFieldCount = computed(
+  () =>
+    primaryProductFields.value.length
+    + secondaryProductFields.value.length
+    + 1,
+)
+
+const calculationDriverOptions = computed(() =>
+  createCalculationInputFields
+    .filter(field => calculationTargetFieldKeys.includes(field.key))
+    .map(field => ({
+      key: field.key,
+      label: field.label,
+      placeholder: field.placeholder,
+      type: field.type,
+    })),
+)
+
+const activeCalculationField = computed(
+  () =>
+    calculationDriverOptions.value.find(
+      field => field.key === calculationDriver.value,
+    )
+    || calculationDriverOptions.value[0]
+    || null,
+)
+
+const calculationCostFields = computed(() =>
+  createCalculationInputFields.filter(field =>
+    calculationCostFieldKeys.includes(field.key),
+  ),
+)
+
+const presetPrimaryItems = computed(() =>
+  form.presetItems
+    .filter(item => presetPrimaryFieldNames.includes(item.name))
+    .sort(
+      (left, right) =>
+        presetPrimaryFieldNames.indexOf(left.name)
+        - presetPrimaryFieldNames.indexOf(right.name),
+    ),
+)
+
+const presetSecondaryItems = computed(() =>
+  form.presetItems.filter(item => !presetPrimaryFieldNames.includes(item.name)),
+)
+
+const presetSummaryItems = computed(() =>
+  presetSummaryFieldNames
+    .map((name) => {
+      const item = form.presetItems.find(entry => entry.name === name)
+
+      if (!item) {
+        return null
+      }
+
+      const value
+        = item.type === "rule"
+          ? getPresetSnapshotRuleName(item) || "未绑定规则表"
+          : item.value || "未设置"
+
+      return {
+        id: item.id,
+        label: item.name,
+        value: item.unit ? `${value} ${item.unit}` : value,
+      }
+    })
+    .filter(Boolean),
+)
 
 function createExtraProductField() {
   const id = `product_extra_${Date.now()}_${extraProductFieldSeed.value}`
@@ -64,7 +178,12 @@ function createExtraProductField() {
 }
 
 function createPresetSnapshotItem(item) {
-  const nextType = item?.type === "boolean" ? "boolean" : "number"
+  const nextType
+    = item?.type === "boolean"
+      ? "boolean"
+      : item?.type === "rule"
+        ? "rule"
+        : "number"
   const nextValue
     = nextType === "boolean"
       ? ["是", "否"].includes(item?.value)
@@ -78,6 +197,7 @@ function createPresetSnapshotItem(item) {
     type: nextType,
     unit: item?.unit || "",
     value: nextValue,
+    rule_table_id: item?.rule_table_id || "",
   }
 }
 
@@ -122,6 +242,7 @@ watch([presetRecords, activePresetId], ensureSelectedPreset, {
 watch(
   selectedPresetRecord,
   (record) => {
+    isPresetEditorOpen.value = false
     applyPresetRecord(record)
   },
   { immediate: true },
@@ -138,6 +259,26 @@ function updatePresetSnapshotItem(item, key, value) {
     return
 
   item.value = value === "boolean" ? "" : String(item.value ?? "")
+  item.rule_table_id = value === "rule" ? item.rule_table_id || "" : ""
+}
+
+function getPresetSnapshotTypeText(item) {
+  if (item.type === "boolean")
+    return "布尔值"
+
+  if (item.type === "rule")
+    return "规则"
+
+  return "数值"
+}
+
+function getPresetSnapshotRuleName(item) {
+  if (item.type !== "rule" || !item.rule_table_id)
+    return ""
+
+  return (
+    templateTables.value.find(table => table.id === item.rule_table_id)?.name || ""
+  )
 }
 
 function addExtraProductField() {
@@ -289,134 +430,146 @@ const calculationSnapshot = computed(() => {
   }
 })
 
-const calculationCards = computed(() => [
+const calculationDriverText = computed(() =>
+  calculationDriver.value === "discountPrice"
+    ? "折后售价"
+    : calculationDriver.value === "revenue"
+      ? "收入"
+      : calculationDriver.value === "profitRate"
+        ? "利润率"
+        : calculationDriver.value === "netProfit"
+          ? "净利润"
+          : "折前价格",
+)
+
+const moneyUnitSuffix = computed(() =>
+  findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+)
+
+const primaryResultHighlights = computed(() => [
+  {
+    label: "净利润",
+    value: formatNumber(
+      calculationSnapshot.value.netProfit,
+      moneyUnitSuffix.value,
+    ),
+  },
+  {
+    label: "利润率",
+    value: formatNumber(calculationSnapshot.value.profitRate, " %"),
+  },
+])
+
+const resultSummaryItems = computed(() => [
+  {
+    label: "组合",
+    value:
+      form.country && form.platform
+        ? `${form.country} / ${form.platform}`
+        : "未选择",
+  },
+  {
+    label: "当前基准",
+    value: calculationDriverText.value,
+  },
+  {
+    label: "折前价",
+    value: formatNumber(
+      calculationSnapshot.value.listPrice,
+      moneyUnitSuffix.value,
+    ),
+  },
+  {
+    label: "折后价",
+    value: formatNumber(
+      calculationSnapshot.value.discountPrice,
+      moneyUnitSuffix.value,
+    ),
+  },
   {
     label: "收入",
-    value: formatNumber(calculationSnapshot.value.revenue),
+    value: formatNumber(
+      calculationSnapshot.value.revenue,
+      moneyUnitSuffix.value,
+    ),
   },
   {
     label: "总费用",
-    value: formatNumber(calculationSnapshot.value.totalFee),
+    value: formatNumber(
+      calculationSnapshot.value.totalFee,
+      moneyUnitSuffix.value,
+    ),
   },
   {
-    label: "当前联动基准",
-    value:
-      calculationDriver.value === "discountPrice"
-        ? "折后售价"
-        : calculationDriver.value === "revenue"
-          ? "收入"
-          : calculationDriver.value === "profitRate"
-            ? "利润率"
-            : calculationDriver.value === "netProfit"
-              ? "净利润"
-              : "折前价格",
-  },
-  {
-    label: "是否包邮",
+    label: "包邮",
     value: calculationSnapshot.value.shippingIncluded,
   },
 ])
 
-const calculationDetails = computed(() => [
-  {
-    label: "折扣率",
-    value: formatNumber(
-      calculationSnapshot.value.discountRate,
-      findPresetSnapshotUnit("折扣")
-        ? ` ${findPresetSnapshotUnit("折扣")}`
-        : "",
-    ),
-  },
-  {
-    label: "活动费率",
-    value: formatNumber(
-      calculationSnapshot.value.activityRate,
-      findPresetSnapshotUnit("活动费率")
-        ? ` ${findPresetSnapshotUnit("活动费率")}`
-        : "",
-    ),
-  },
-  {
-    label: "交易费率",
-    value: formatNumber(
-      calculationSnapshot.value.transactionRate,
-      findPresetSnapshotUnit("交易费率")
-        ? ` ${findPresetSnapshotUnit("交易费率")}`
-        : "",
-    ),
-  },
-  {
-    label: "提现费率",
-    value: formatNumber(
-      calculationSnapshot.value.withdrawRate,
-      findPresetSnapshotUnit("提现费率")
-        ? ` ${findPresetSnapshotUnit("提现费率")}`
-        : "",
-    ),
-  },
-  {
-    label: "汇损",
-    value: formatNumber(
-      calculationSnapshot.value.exchangeLossRate,
-      findPresetSnapshotUnit("汇损")
-        ? ` ${findPresetSnapshotUnit("汇损")}`
-        : "",
-    ),
-  },
-  {
-    label: "税率",
-    value: formatNumber(
-      calculationSnapshot.value.taxRate,
-      findPresetSnapshotUnit("税率")
-        ? ` ${findPresetSnapshotUnit("税率")}`
-        : "",
-    ),
-  },
+const feeSummaryItems = computed(() => [
   {
     label: "活动费",
     value: formatNumber(
       calculationSnapshot.value.activityFee,
-      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+      moneyUnitSuffix.value,
     ),
   },
   {
     label: "交易费",
     value: formatNumber(
       calculationSnapshot.value.transactionFee,
-      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+      moneyUnitSuffix.value,
     ),
   },
   {
     label: "提现费",
     value: formatNumber(
       calculationSnapshot.value.withdrawFee,
-      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+      moneyUnitSuffix.value,
     ),
   },
   {
     label: "汇损金额",
     value: formatNumber(
       calculationSnapshot.value.exchangeLossFee,
-      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+      moneyUnitSuffix.value,
     ),
   },
   {
     label: "税费",
     value: formatNumber(
       calculationSnapshot.value.taxFee,
-      findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
+      moneyUnitSuffix.value,
     ),
   },
   {
-    label: "贴单费用",
+    label: "贴单费",
     value: formatNumber(
       calculationSnapshot.value.labelFee,
       findPresetSnapshotUnit("贴单费用")
         ? ` ${findPresetSnapshotUnit("贴单费用")}`
-        : findPresetMoneyUnit()
-          ? ` ${findPresetMoneyUnit()}`
+        : moneyUnitSuffix.value
+          ? moneyUnitSuffix.value
           : "",
     ),
+  },
+  {
+    label: "卖家运费",
+    value: formatNumber(
+      calculationSnapshot.value.sellerShipping,
+      moneyUnitSuffix.value,
+    ),
+  },
+  {
+    label: "固定附加",
+    value: formatNumber(
+      calculationSnapshot.value.fixedSurcharge,
+      moneyUnitSuffix.value,
+    ),
+  },
+  {
+    label: "成本",
+    value: formatNumber(toNumber(form.cost), moneyUnitSuffix.value),
   },
 ])
 
@@ -465,93 +618,295 @@ function updateCalculationField(key, value) {
     calculationDriver.value = key
   }
 }
+
+function setCalculationDriver(key) {
+  calculationDriver.value = key
+}
 </script>
 
 <template>
   <div class="h-full min-h-0 overflow-y-auto pr-2">
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.35fr),minmax(340px,0.8fr)]">
-      <div class="space-y-4">
-        <VCard class="panel-card overflow-hidden">
-          <div class="border-b border-slate-200 px-5 py-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-lg font-semibold text-slate-900">预设字段</div>
-                <div class="mt-1 text-sm text-slate-500">
-                  选择一个预设组合，并把参数快照带入当前订单。
-                </div>
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr),360px]">
+      <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+        <div
+          class="
+            flex flex-wrap gap-3 border-b border-[#c6c6c6] bg-[#f8f8f8]
+            px-5 py-4
+          "
+        >
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >1</span>
+            <span>预设</span>
+          </div>
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >2</span>
+            <span>商品</span>
+          </div>
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#161616]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >3</span>
+            <span>目标</span>
+          </div>
+          <div
+            class="inline-flex items-center gap-2 text-[13px] text-[#6f6f6f]"
+          >
+            <span
+              class="
+                inline-flex h-5 w-5 items-center justify-center border
+                border-[#c6c6c6] text-xs
+              "
+            >4</span>
+            <span>结果</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between gap-4 px-5 py-4">
+            <div class="flex items-baseline gap-3">
+              <div class="text-base font-semibold text-[#161616]">
+                1. 选择预设
               </div>
+              <div class="text-xs text-[#525252]">
+                {{ form.presetItems.length }} 项
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
               <VBtn
                 v-if="selectedPresetRecord"
                 variant="tonal"
                 size="small"
+                @click="isPresetEditorOpen = !isPresetEditorOpen"
+              >
+                {{ isPresetEditorOpen ? "收起参数" : "编辑参数" }}
+              </VBtn>
+              <VBtn
+                v-if="selectedPresetRecord && isPresetEditorOpen"
+                variant="text"
+                size="small"
                 @click="resetPresetItemsFromSource"
               >
-                重新应用预设
+                重置
               </VBtn>
             </div>
           </div>
 
-          <div v-if="hasPresetRecords" class="space-y-4 p-5">
-            <div class="grid gap-4 md:grid-cols-3">
-              <VAutocomplete
-                v-model="selectedPresetId"
-                :items="presetOptions"
-                item-title="title"
-                item-value="value"
-                label="预设组合"
-                variant="outlined"
-                hide-details
-              />
-              <VTextField
-                :model-value="form.country"
-                label="国家"
-                variant="outlined"
-                hide-details
-                readonly
-              />
-              <VTextField
-                :model-value="form.platform"
-                label="平台"
-                variant="outlined"
-                hide-details
-                readonly
-              />
+          <div v-if="hasPresetRecords" class="grid gap-4 px-5 pb-4">
+            <div class="grid gap-3 lg:grid-cols-3">
+              <div class="surface-field">
+                <div class="surface-field__label">预设组合</div>
+                <VAutocomplete
+                  v-model="selectedPresetId"
+                  :items="presetOptions"
+                  item-title="title"
+                  item-value="value"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
+              </div>
+              <div class="surface-field">
+                <div class="surface-field__label">国家</div>
+                <VTextField
+                  :model-value="form.country"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  readonly
+                />
+              </div>
+              <div class="surface-field">
+                <div class="surface-field__label">平台</div>
+                <VTextField
+                  :model-value="form.platform"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  readonly
+                />
+              </div>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-2">
+            <div class="grid gap-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-sm font-medium text-[#161616]">关键参数</div>
+                <div class="text-xs text-[#525252]">
+                  {{ presetSummaryItems.length }}
+                </div>
+              </div>
+
               <div
-                v-for="item in form.presetItems"
-                :key="item.id"
-                class="rounded-5 border border-slate-200 bg-slate-50/80 p-4"
+                v-if="presetSummaryItems.length"
+                class="grid gap-3 md:grid-cols-3"
               >
-                <div class="flex items-center justify-between gap-3">
-                  <div class="text-sm font-semibold text-slate-900">
-                    {{ item.name }}
+                <div
+                  v-for="item in presetSummaryItems"
+                  :key="item.id"
+                  class="border border-[#e0e0e0] bg-[#f8f8f8] px-4 py-3"
+                >
+                  <div class="text-xs text-[#525252]">
+                    {{ item.label }}
                   </div>
-                  <div class="text-xs text-slate-400">
-                    {{ item.type === "boolean" ? "布尔值" : "数值" }}
-                    <span v-if="item.unit"> / {{ item.unit }}</span>
+                  <div class="mt-1.5 text-[15px] font-medium text-[#161616]">
+                    {{ item.value }}
                   </div>
                 </div>
+              </div>
 
-                <div class="mt-3">
+              <div
+                v-else
+                class="
+                  border border-dashed border-[#c6c6c6] bg-[#f8f8f8] px-4 py-3
+                  text-sm text-[#6f6f6f]
+                "
+              >
+                暂无关键参数。
+              </div>
+            </div>
+
+            <div
+              v-if="isPresetEditorOpen && presetPrimaryItems.length"
+              class="grid gap-3 md:grid-cols-2"
+            >
+              <div
+                v-for="item in presetPrimaryItems"
+                :key="item.id"
+                class="border-b border-[#e0e0e0] pb-2"
+              >
+                <div class="text-sm font-medium text-[#161616]">
+                  {{ item.name || "未命名字段" }}
+                </div>
+                <div class="mb-1.5 mt-0.5 text-xs text-[#525252]">
+                  {{ item.unit || getPresetSnapshotTypeText(item) }}
+                </div>
+                <div class="min-w-0">
                   <VSelect
                     v-if="item.type === 'boolean'"
                     :model-value="item.value"
                     :items="booleanValueOptions"
                     item-title="title"
                     item-value="value"
-                    variant="outlined"
+                    variant="plain"
                     hide-details
+                    density="compact"
                     @update:model-value="
                       (value) => updatePresetSnapshotItem(item, 'value', value)
                     "
                   />
                   <VTextField
+                    v-else-if="item.type === 'rule'"
+                    :model-value="
+                      getPresetSnapshotRuleName(item) || '未绑定规则表'
+                    "
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                    readonly
+                  />
+                  <VTextField
                     v-else
                     :model-value="item.value"
-                    variant="outlined"
+                    variant="plain"
                     hide-details
+                    density="compact"
+                    :suffix="item.unit || undefined"
+                    placeholder="输入数值"
+                    @update:model-value="
+                      (value) => updatePresetSnapshotItem(item, 'value', value)
+                    "
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="isPresetEditorOpen && presetSecondaryItems.length"
+              class="border-t border-[#e0e0e0]"
+            >
+              <div
+                class="
+                  hidden border-b border-[#e0e0e0] py-2 text-xs text-[#525252]
+                  md:grid md:grid-cols-[minmax(0,1fr),88px,200px] md:gap-3
+                "
+              >
+                <div>字段</div>
+                <div>类型</div>
+                <div>值</div>
+              </div>
+              <div
+                v-for="item in presetSecondaryItems"
+                :key="item.id"
+                class="
+                  grid gap-3 border-b border-[#e0e0e0] py-3
+                  md:grid-cols-[minmax(0,1fr),88px,200px]
+                  md:items-center
+                "
+              >
+                <div class="min-w-0">
+                  <div class="text-sm font-medium text-[#161616]">
+                    {{ item.name || "未命名字段" }}
+                  </div>
+                  <div class="mt-1 text-xs text-[#525252]">
+                    {{ item.unit || "无单位" }}
+                  </div>
+                </div>
+
+                <div class="text-xs text-[#525252]">
+                  {{ getPresetSnapshotTypeText(item) }}
+                </div>
+
+                <div class="min-w-0">
+                  <VSelect
+                    v-if="item.type === 'boolean'"
+                    :model-value="item.value"
+                    :items="booleanValueOptions"
+                    item-title="title"
+                    item-value="value"
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                    @update:model-value="
+                      (value) => updatePresetSnapshotItem(item, 'value', value)
+                    "
+                  />
+                  <VTextField
+                    v-else-if="item.type === 'rule'"
+                    :model-value="
+                      getPresetSnapshotRuleName(item) || '未绑定规则表'
+                    "
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                    readonly
+                  />
+                  <VTextField
+                    v-else
+                    :model-value="item.value"
+                    variant="plain"
+                    hide-details
+                    density="compact"
                     :suffix="item.unit || undefined"
                     placeholder="输入数值"
                     @update:model-value="
@@ -565,88 +920,238 @@ function updateCalculationField(key, value) {
 
           <div
             v-else
-            class="flex flex-col items-center justify-center gap-3 px-5 py-12"
+            class="flex flex-col items-center justify-center gap-3 px-5 py-10"
           >
-            <div class="text-sm text-slate-400">
-              还没有可用预设，先去预设页创建国家 / 平台组合。
-            </div>
+            <div class="text-sm text-[#6f6f6f]">还没有预设组合。</div>
             <RouterLink to="/preset">
-              <VBtn variant="tonal">前往预设页</VBtn>
+              <VBtn variant="tonal">去预设页</VBtn>
             </RouterLink>
           </div>
-        </VCard>
+        </div>
 
-        <VCard class="panel-card overflow-hidden">
-          <div class="border-b border-slate-200 px-5 py-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-lg font-semibold text-slate-900">商品字段</div>
-                <div class="mt-1 text-sm text-slate-500">
-                  固定商品字段 + 可扩展字段，后续用于保存订单表。
-                </div>
+        <div class="border-t border-[#c6c6c6]">
+          <div class="flex items-center justify-between gap-4 px-5 py-4">
+            <div class="flex items-baseline gap-3">
+              <div class="text-base font-semibold text-[#161616]">
+                2. 核心商品信息
               </div>
-              <VBtn variant="tonal" size="small" @click="addExtraProductField">
-                添加自定义字段
-              </VBtn>
+              <div class="text-xs text-[#525252]">
+                {{ visibleProductFieldCount }} 项
+              </div>
             </div>
           </div>
 
-          <div class="space-y-4 p-5">
-            <div class="grid gap-4 md:grid-cols-2">
-              <VTextField
-                v-for="field in createProductBaseFields"
+          <div class="grid gap-4 px-5 pb-4">
+            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-2">
+              <div
+                v-for="field in primaryProductFields"
                 :key="field.key"
-                v-model="form[field.key]"
-                :label="field.label"
-                :placeholder="field.placeholder"
-                :type="field.type"
-                variant="outlined"
-                hide-details
-              />
+                class="surface-field"
+              >
+                <div class="surface-field__label">{{ field.label }}</div>
+                <VTextField
+                  v-model="form[field.key]"
+                  class="surface-field__control"
+                  :placeholder="field.placeholder"
+                  :type="field.type"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
+              </div>
             </div>
 
-            <VTextarea
-              v-model="form.notes"
-              label="备注"
-              placeholder="补充商品说明、备注或外部链接"
-              variant="outlined"
-              rows="3"
-              auto-grow
-              hide-details
-            />
+            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-2">
+              <div
+                v-for="field in secondaryProductFields"
+                :key="field.key"
+                class="surface-field"
+              >
+                <div class="surface-field__label">{{ field.label }}</div>
+                <VTextField
+                  v-model="form[field.key]"
+                  class="surface-field__control"
+                  :placeholder="field.placeholder"
+                  :type="field.type"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
+              </div>
+            </div>
 
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="text-sm font-semibold text-slate-900">
-                  自定义商品字段
+            <div class="surface-field">
+              <div class="surface-field__label">备注</div>
+              <textarea
+                v-model="form.notes"
+                rows="3"
+                placeholder="补充内容"
+                class="surface-field__native min-h-[88px]"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-[#c6c6c6]">
+          <div class="flex items-center justify-between gap-4 px-5 py-4">
+            <div class="flex items-baseline gap-3">
+              <div class="text-base font-semibold text-[#161616]">
+                3. 目标与费用
+              </div>
+              <div class="text-xs text-[#525252]">
+                {{ calculationDriverText }}
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-4 px-5 pb-4">
+            <div class="grid gap-2.5">
+              <div class="text-sm font-medium text-[#161616]">反推目标</div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="field in calculationDriverOptions"
+                  :key="field.key"
+                  type="button"
+                  class="
+                    min-h-8 border border-[#c6c6c6] bg-white px-3 py-1
+                    text-[13px]
+                    text-[#525252] transition-colors
+                  "
+                  :class="
+                    calculationDriver === field.key
+                      ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                      : `
+                        hover:border-[#8d8d8d] hover:bg-[#f8f8f8]
+                        hover:text-[#161616]
+                      `
+                  "
+                  @click="setCalculationDriver(field.key)"
+                >
+                  {{ field.label }}
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="activeCalculationField"
+              class="grid gap-3 lg:grid-cols-2"
+            >
+              <div class="surface-field">
+                <div class="surface-field__label">
+                  {{ activeCalculationField.label }}
                 </div>
-                <div class="text-xs text-slate-400">
-                  共 {{ form.extraProductFields.length }} 项
+                <VTextField
+                  :model-value="
+                    getCalculationFieldValue(activeCalculationField.key)
+                  "
+                  class="surface-field__control"
+                  :placeholder="activeCalculationField.placeholder"
+                  :type="activeCalculationField.type"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  @update:model-value="
+                    (value) =>
+                      updateCalculationField(activeCalculationField.key, value)
+                  "
+                />
+              </div>
+            </div>
+
+            <div class="grid gap-3 lg:grid-cols-2">
+              <div
+                v-for="field in calculationCostFields"
+                :key="field.key"
+                class="surface-field"
+              >
+                <div class="surface-field__label">{{ field.label }}</div>
+                <VTextField
+                  :model-value="getCalculationFieldValue(field.key)"
+                  class="surface-field__control"
+                  :placeholder="field.placeholder"
+                  :suffix="field.suffix"
+                  :type="field.type"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  @update:model-value="
+                    (value) => updateCalculationField(field.key, value)
+                  "
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <details class="border-t border-[#e0e0e0] px-5">
+          <summary
+            class="
+              flex cursor-pointer list-none items-center justify-between gap-3
+              py-4 text-sm font-medium text-[#161616]
+            "
+          >
+            <span>补充字段</span>
+            <span class="text-xs text-[#525252]">
+              {{ form.extraProductFields.length }}
+            </span>
+          </summary>
+
+          <div class="grid gap-4 pb-4">
+            <div class="grid gap-3">
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-medium text-[#161616]">补充字段</div>
+                <div class="flex items-center gap-3">
+                  <div class="text-xs text-[#525252]">
+                    {{ form.extraProductFields.length }}
+                  </div>
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    @click="addExtraProductField"
+                  >
+                    添加字段
+                  </VBtn>
                 </div>
               </div>
 
               <div
                 v-if="form.extraProductFields.length"
-                class="space-y-3"
+                class="border-t border-[#e0e0e0]"
               >
+                <div
+                  class="
+                    hidden border-b border-[#e0e0e0] py-2 text-xs text-[#525252]
+                    md:grid md:grid-cols-[180px,minmax(0,1fr),56px] md:gap-3
+                  "
+                >
+                  <div>字段名</div>
+                  <div>字段值</div>
+                  <div />
+                </div>
                 <div
                   v-for="field in form.extraProductFields"
                   :key="field.id"
-                  class="grid gap-3 md:grid-cols-[180px,minmax(0,1fr),56px]"
+                  class="
+                    grid gap-3 border-b border-[#e0e0e0] py-3
+                    md:grid-cols-[180px,minmax(0,1fr),56px]
+                    md:items-end
+                  "
                 >
                   <VTextField
                     v-model="field.label"
                     label="字段名"
                     placeholder="例如 供应商"
-                    variant="outlined"
+                    variant="plain"
                     hide-details
+                    density="compact"
                   />
                   <VTextField
                     v-model="field.value"
                     label="字段值"
                     placeholder="输入内容"
-                    variant="outlined"
+                    variant="plain"
                     hide-details
+                    density="compact"
                   />
                   <VBtn
                     color="error"
@@ -661,73 +1166,76 @@ function updateCalculationField(key, value) {
               <div
                 v-else
                 class="
-                  rounded-5 border border-dashed p-4
-                  text-sm text-slate-400
+                  border border-dashed border-[#c6c6c6] bg-[#f8f8f8] px-4 py-3
+                  text-sm text-[#6f6f6f]
                 "
               >
-                还没有额外商品字段，点击右上角按钮可以继续添加。
+                暂无补充字段。
               </div>
             </div>
           </div>
-        </VCard>
-      </div>
+        </details>
+      </VCard>
 
-      <div class="space-y-4">
-        <VCard class="panel-card overflow-hidden">
-          <div class="border-b border-slate-200 px-5 py-4">
-            <div class="text-lg font-semibold text-slate-900">计算字段</div>
-            <div class="mt-1 text-sm text-slate-500">
-              支持按折前价格、折后售价或利润率任一方向联动反算。
-            </div>
+      <div class="space-y-4 xl:sticky xl:top-4 xl:self-start">
+        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+          <div class="border-b border-[#c6c6c6] px-5 py-4">
+            <div class="text-lg font-semibold text-[#161616]">结果</div>
           </div>
 
-          <div class="space-y-4 p-5">
-            <div class="grid gap-4">
-              <VTextField
-                v-for="field in createCalculationInputFields"
-                :key="field.key"
-                :model-value="getCalculationFieldValue(field.key)"
-                :label="field.label"
-                :placeholder="field.placeholder"
-                :suffix="field.suffix"
-                :type="field.type"
-                variant="outlined"
-                hide-details
-                @update:model-value="
-                  (value) => updateCalculationField(field.key, value)
-                "
-              />
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-2">
+          <div class="space-y-3 p-4">
+            <div class="space-y-3">
               <div
-                v-for="card in calculationCards"
-                :key="card.label"
-                class="rounded-5 bg-slate-950 px-4 py-4 text-white"
+                v-for="item in primaryResultHighlights"
+                :key="item.label"
+                class="
+                  border border-[#c6c6c6] border-t-[2px] border-t-[#0f62fe]
+                  bg-[#f8f8f8] px-4 py-3
+                "
               >
-                <div class="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  {{ card.label }}
+                <div class="text-xs font-medium text-[#525252]">
+                  {{ item.label }}
                 </div>
-                <div class="mt-2 text-2xl font-semibold">
-                  {{ card.value }}
+                <div class="mt-2 text-[1.8rem] font-semibold text-[#161616]">
+                  {{ item.value }}
                 </div>
               </div>
             </div>
 
-            <div class="rounded-5 border border-slate-200 bg-slate-50/80 p-4">
-              <div class="text-sm font-semibold text-slate-900">费用明细</div>
-              <div class="mt-3 space-y-3">
+            <div class="border-t border-[#e0e0e0] pt-3.5">
+              <div class="text-sm font-semibold text-[#161616]">概览</div>
+              <dl class="mt-3">
                 <div
-                  v-for="item in calculationDetails"
+                  v-for="item in resultSummaryItems"
                   :key="item.label"
-                  class="flex items-center justify-between gap-3 text-sm"
+                  class="
+                    flex items-center justify-between gap-3 py-1.5 text-sm
+                  "
                 >
-                  <span class="text-slate-500">{{ item.label }}</span>
-                  <span class="font-medium text-slate-900">
+                  <dt class="m-0 text-[#525252]">{{ item.label }}</dt>
+                  <dd class="m-0 font-medium text-[#161616]">
                     {{ item.value }}
-                  </span>
+                  </dd>
                 </div>
-              </div>
+              </dl>
+            </div>
+
+            <div class="border-t border-[#e0e0e0] pt-3.5">
+              <div class="text-sm font-semibold text-[#161616]">费用</div>
+              <dl class="mt-3">
+                <div
+                  v-for="item in feeSummaryItems"
+                  :key="item.label"
+                  class="
+                    flex items-center justify-between gap-3 py-1.5 text-sm
+                  "
+                >
+                  <dt class="m-0 text-[#525252]">{{ item.label }}</dt>
+                  <dd class="m-0 font-medium text-[#161616]">
+                    {{ item.value }}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
         </VCard>

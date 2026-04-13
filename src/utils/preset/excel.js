@@ -22,6 +22,9 @@ import * as XLSX from "xlsx"
  * @property {string} type 参数类型。
  * @property {string} unit 单位。
  * @property {string} value 值或规则。
+ * @property {string} rule_mode 规则模式。
+ * @property {string} rule_table_id 绑定的规则表 ID。
+ * @property {object} rule_config 规则配置对象。
  * @property {number} sort 排序值。
  */
 
@@ -59,6 +62,9 @@ export const PRESET_ITEM_COLUMNS = [
   "type",
   "unit",
   "value",
+  "rule_mode",
+  "rule_table_id",
+  "rule_config",
   "sort",
 ]
 
@@ -141,6 +147,14 @@ export function normalizePresetItem(item = {}) {
     type: normalizeValue(item.type) || "text",
     unit: normalizeValue(item.unit),
     value: normalizeValue(item.value),
+    rule_mode: normalizeValue(item.rule_mode || item.ruleMode),
+    rule_table_id: normalizeValue(item.rule_table_id || item.ruleTableId),
+    rule_config:
+      typeof item.rule_config === "object"
+        ? item.rule_config
+        : typeof item.ruleConfig === "object"
+          ? item.ruleConfig
+          : normalizeValue(item.rule_config || item.ruleConfig),
     sort: normalizeSort(item.sort),
   }
 }
@@ -208,7 +222,13 @@ export function presetGroupsToRows(list = []) {
  * @returns {PresetItem[]} 可直接写入 sheet 的行数据。
  */
 export function presetItemsToRows(list = []) {
-  return dedupePresetItemList(list)
+  return dedupePresetItemList(list).map(item => ({
+    ...item,
+    rule_config:
+      typeof item.rule_config === "string"
+        ? item.rule_config
+        : JSON.stringify(item.rule_config || {}),
+  }))
 }
 
 /**

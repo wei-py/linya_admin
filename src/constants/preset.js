@@ -74,6 +74,7 @@ export const platformOptions = [
 
 export const presetItemTypeOptions = [
   { title: "数值", value: "number" },
+  { title: "规则", value: "rule" },
   { title: "布尔值", value: "boolean" },
 ]
 

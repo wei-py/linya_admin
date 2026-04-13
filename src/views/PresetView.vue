@@ -1,31 +1,38 @@
 <script setup>
 import { storeToRefs } from "pinia"
-import { reactive, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { countryOptions, platformOptions } from "@/constants/preset"
 import { usePresetStore } from "@/stores/preset"
 
-const baseInfo = reactive({
+const createDraft = reactive({
   country: "",
   platform: "",
 })
+const searchText = ref("")
 
 const presetStore = usePresetStore()
-const { activePreset, activePresetId, presetRecords } = storeToRefs(presetStore)
+const { activePresetId, presetRecords } = storeToRefs(presetStore)
 const route = useRoute()
 const router = useRouter()
 
-function syncBaseInfoFromPreset(preset) {
-  if (!preset) {
-    baseInfo.country = ""
-    baseInfo.platform = ""
-    return
+const filteredPresetRecords = computed(() => {
+  const keyword = searchText.value.trim().toLowerCase()
+
+  if (!keyword) {
+    return presetRecords.value
   }
 
-  baseInfo.country = preset.country
-  baseInfo.platform = preset.platform
-}
+  return presetRecords.value.filter((item) => {
+    const text = [item.country_platform, item.country, item.platform]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
+    return text.includes(keyword)
+  })
+})
 
 watch(
   () => route.params.presetId,
@@ -59,14 +66,6 @@ watch(
 )
 
 watch(
-  activePreset,
-  (preset) => {
-    syncBaseInfoFromPreset(preset)
-  },
-  { immediate: true },
-)
-
-watch(
   activePresetId,
   (nextId) => {
     const routePresetId
@@ -91,9 +90,12 @@ watch(
 
 async function handleAdd() {
   await presetStore.addPresetRecord({
-    country: baseInfo.country,
-    platform: baseInfo.platform,
+    country: createDraft.country,
+    platform: createDraft.platform,
   })
+
+  createDraft.country = ""
+  createDraft.platform = ""
 }
 
 function handleSelectPreset(item) {
@@ -106,59 +108,141 @@ async function handleDeletePreset(item) {
 </script>
 
 <template>
-  <div class="h-full">
-    <div class="flex h-full gap-1">
-      <div class="flex h-full w-[15%] flex-col gap-1">
-        <div class="flex flex-col gap-1">
-          <VAutocomplete
-            v-model="baseInfo.country"
-            :items="countryOptions"
-            label="国家"
-            variant="solo-filled"
-            clearable
-          />
-          <VAutocomplete
-            v-model="baseInfo.platform"
-            :items="platformOptions"
-            label="平台"
-            variant="solo-filled"
-            clearable
-          />
-          <VBtn class="w-full" variant="tonal" @click="handleAdd"> 添加 </VBtn>
-        </div>
+  <div class="h-full min-h-0 overflow-y-auto pr-2">
+    <div class="grid h-full gap-4 xl:grid-cols-[320px,minmax(0,1fr)]">
+      <div class="space-y-4">
+        <VCard class="overflow-hidden border border-[#c6c6c6] bg-white">
+          <div class="border-b border-[#c6c6c6] px-5 py-4">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-lg font-semibold text-[#161616]">新建组合</div>
+              <div class="text-xs text-[#525252]">
+                {{ presetRecords.length }} 项
+              </div>
+            </div>
+          </div>
 
-        <VList class="flex-1 overflow-y-auto">
-          <VListItem
-            v-for="item in presetRecords"
-            :key="item.id"
-            :active="activePresetId === item.id"
-            color="primary"
-            @click="handleSelectPreset(item)"
-          >
-            <VListItemTitle>{{ item.country_platform }}</VListItemTitle>
-            <template #append>
-              <VIcon
-                class="
-                  cursor-pointer text-slate-400 transition hover:text-red-500
-                "
-                @click.stop="handleDeletePreset(item)"
+          <div class="space-y-3 p-5">
+            <div class="grid gap-3">
+              <div class="surface-field">
+                <div class="surface-field__label">国家</div>
+                <VAutocomplete
+                  v-model="createDraft.country"
+                  :items="countryOptions"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  clearable
+                />
+              </div>
+              <div class="surface-field">
+                <div class="surface-field__label">平台</div>
+                <VAutocomplete
+                  v-model="createDraft.platform"
+                  :items="platformOptions"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                  clearable
+                />
+              </div>
+              <VBtn
+                class="w-full"
+                variant="flat"
+                color="primary"
+                :disabled="!createDraft.country || !createDraft.platform"
+                @click="handleAdd"
               >
-                mdi-close
-              </VIcon>
-            </template>
-          </VListItem>
-        </VList>
+                新增组合
+              </VBtn>
+            </div>
+          </div>
+        </VCard>
+
+        <VCard
+          class="
+            flex min-h-0 flex-col overflow-hidden border border-[#c6c6c6]
+            bg-white
+          "
+        >
+          <div class="border-b border-[#c6c6c6] px-5 py-4">
+            <div class="text-lg font-semibold text-[#161616]">组合列表</div>
+            <div class="mt-3 surface-field">
+              <div class="surface-field__label">搜索</div>
+              <VTextField
+                v-model="searchText"
+                class="surface-field__control"
+                placeholder="国家 / 平台"
+                variant="plain"
+                hide-details
+                density="compact"
+              />
+            </div>
+          </div>
+
+          <div
+            v-if="filteredPresetRecords.length"
+            class="flex-1 overflow-y-auto"
+          >
+            <button
+              v-for="item in filteredPresetRecords"
+              :key="item.id"
+              type="button"
+              class="
+                flex w-full items-start justify-between border-l-[3px] px-5 py-4
+                text-left transition-colors
+              "
+              :class="
+                activePresetId === item.id
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
+              "
+              @click="handleSelectPreset(item)"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-semibold">
+                  {{ item.country_platform }}
+                </div>
+                <div class="mt-1 text-xs text-[#525252]">
+                  {{ item.country || "未设置" }} / {{ item.platform || "未设置" }}
+                </div>
+              </div>
+              <div class="ml-3 flex items-center gap-3">
+                <div class="text-right text-xs text-[#525252]">
+                  {{ item.items.length }} 项
+                </div>
+                <VBtn
+                  color="error"
+                  variant="text"
+                  size="small"
+                  density="comfortable"
+                  @click.stop="handleDeletePreset(item)"
+                >
+                  删除
+                </VBtn>
+              </div>
+            </button>
+          </div>
+
+          <div
+            v-else
+            class="
+              flex flex-1 items-center justify-center px-5 py-10 text-sm
+              text-[#6f6f6f]
+            "
+          >
+            没有匹配的组合。
+          </div>
+        </VCard>
       </div>
 
-      <VCard class="flex-1 p-2">
+      <VCard class="min-h-0 overflow-hidden border border-[#c6c6c6] bg-white">
         <RouterView />
       </VCard>
     </div>
   </div>
 </template>
-
-<style scoped>
-:deep(.v-input__details) {
-  display: none;
-}
-</style>

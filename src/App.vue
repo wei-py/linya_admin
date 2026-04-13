@@ -2,10 +2,12 @@
 import { onMounted, ref } from "vue"
 
 import { usePresetStore } from "@/stores/preset"
+import { useTemplateStore } from "@/stores/template"
 import { isTauriApp, pickExcelFilePath } from "@/utils/tauri/excel-file"
 
 const fileInputRef = ref(null)
 const presetStore = usePresetStore()
+const templateStore = useTemplateStore()
 
 async function handleBind() {
   if (isTauriApp()) {
@@ -14,7 +16,12 @@ async function handleBind() {
     if (!path)
       return
 
-    await presetStore.bindExcelFilePath(path)
+    const isBound = await presetStore.bindExcelFilePath(path)
+
+    if (isBound) {
+      await templateStore.refreshFromBoundExcel()
+    }
+
     return
   }
 
@@ -27,39 +34,60 @@ async function handleFileChange(event) {
   if (!file)
     return
 
-  await presetStore.bindExcelFile(file)
+  const isBound = await presetStore.bindExcelFile(file)
+
+  if (isBound) {
+    await templateStore.refreshFromBoundExcel()
+  }
+
   event.target.value = ""
 }
 
 onMounted(async () => {
   await presetStore.refreshBoundExcelFile()
+  await templateStore.refreshFromBoundExcel()
 })
 </script>
 
 <template>
   <VApp>
-    <div class="h-screen w-full overflow-hidden bg-slate-200">
+    <div class="flex min-h-screen bg-[#f4f4f4]">
       <VNavigationDrawer
-        color="transparent"
-        floating
+        class="border-r border-[#c6c6c6] bg-white"
         border="0"
-        width="240"
+        width="272"
         permanent
       >
-        <div class="m-4 panel-card p-5">
-          <div class="text-xs uppercase tracking-[0.25em] text-slate-400">
+        <div class="border-b border-[#c6c6c6] px-5 py-5">
+          <div class="text-xs font-medium tracking-[0.01em] text-[#525252]">
+            Workspace
+          </div>
+          <!-- <div
+            class="
+              mt-3 text-lg font-semibold tracking-[-0.01em] text-[#161616]
+            "
+          >
             Linya Admin
           </div>
+          <div class="mt-2 text-sm text-[#525252]">
+            Excel 驱动的配置后台
+          </div> -->
         </div>
 
-        <div class="mx-4 mt-4 space-y-3">
+        <div class="py-4">
           <RouterLink to="/preset" class="block">
             <div
-              class="section-shell"
+              class="
+                flex min-h-12 items-center gap-3 border-l-[3px] px-5 text-sm
+                font-medium transition-colors
+              "
               :class="
-                $route.path === '/preset'
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'panel-card text-slate-700 hover:bg-white'
+                $route.path.startsWith('/preset')
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
               "
             >
               <span class="flex items-center gap-3">
@@ -71,11 +99,17 @@ onMounted(async () => {
 
           <RouterLink to="/template" class="block">
             <div
-              class="section-shell"
+              class="
+                flex min-h-12 items-center gap-3 border-l-[3px] px-5 text-sm
+                font-medium transition-colors
+              "
               :class="
                 $route.path === '/template'
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'panel-card text-slate-700 hover:bg-white'
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
               "
             >
               <span class="flex items-center gap-3">
@@ -87,11 +121,17 @@ onMounted(async () => {
 
           <RouterLink to="/create" class="block">
             <div
-              class="section-shell"
+              class="
+                flex min-h-12 items-center gap-3 border-l-[3px] px-5 text-sm
+                font-medium transition-colors
+              "
               :class="
                 $route.path === '/create'
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'panel-card text-slate-700 hover:bg-white'
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
               "
             >
               <span class="flex items-center gap-3">
@@ -103,11 +143,17 @@ onMounted(async () => {
 
           <RouterLink to="/list" class="block">
             <div
-              class="section-shell"
+              class="
+                flex min-h-12 items-center gap-3 border-l-[3px] px-5 text-sm
+                font-medium transition-colors
+              "
               :class="
                 $route.path === '/list'
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'panel-card text-slate-700 hover:bg-white'
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
               "
             >
               <span class="flex items-center gap-3">
@@ -117,22 +163,44 @@ onMounted(async () => {
             </div>
           </RouterLink>
         </div>
-        <div class="mx-4 mt-10">
-          <input
-            ref="fileInputRef"
-            class="hidden"
-            type="file"
-            accept=".xlsx,.xls"
-            @change="handleFileChange"
-          >
-          <VBtn class="w-full" variant="tonal" @click="handleBind">
-            {{ presetStore.excelFileName || "未绑定" }}
-          </VBtn>
+
+        <div class="mt-auto px-5 pb-5">
+          <div class="border border-[#c6c6c6] bg-[#f8f8f8] px-4 py-4">
+            <div class="text-[13px] font-medium text-[#161616]">
+              {{
+                presetStore.hasBoundExcelFile
+                  ? presetStore.excelFileName || "已绑定 Excel"
+                  : "未绑定 Excel"
+              }}
+            </div>
+            <!-- <div class="mt-2 text-xs text-[#525252]">
+              模板和预设会同步到当前文件
+            </div> -->
+            <input
+              ref="fileInputRef"
+              class="hidden"
+              type="file"
+              accept=".xlsx,.xls"
+              @change="handleFileChange"
+            >
+            <VBtn
+              class="mt-4 w-full"
+              variant="flat"
+              color="primary"
+              @click="handleBind"
+            >
+              {{
+                presetStore.hasBoundExcelFile
+                  ? "重新选择 Excel"
+                  : "选择 Excel"
+              }}
+            </VBtn>
+          </div>
         </div>
       </VNavigationDrawer>
 
-      <VMain class="h-full min-h-0 w-full">
-        <div class="mx-auto h-full min-h-0 w-full py-4 px-2">
+      <VMain class="min-h-screen min-w-0 w-full bg-[#f4f4f4]">
+        <div class="mx-auto min-h-screen w-full px-4 py-4 md:px-8 md:py-8">
           <RouterView />
         </div>
       </VMain>
