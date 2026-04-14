@@ -21,6 +21,7 @@ import {
   readBinaryFile,
   writeBinaryFile,
 } from "@/utils/tauri/excel-file"
+import { extractExcelEmbeddedImages } from "@/utils/tauri/excel-images"
 
 const PRESET_RECORDS_STORAGE_KEY = "preset:records"
 const EXCEL_FILE_NAME_STORAGE_KEY = "preset:excelFileName"
@@ -178,6 +179,9 @@ export const usePresetStore = defineStore("preset", {
     excelFilePath: localStorage.getItem(EXCEL_FILE_PATH_STORAGE_KEY) || "",
     presetRecords: getInitialPresetRecords(),
     activePresetId: getInitialActivePresetId(),
+    excelEmbeddedImages: [],
+    excelEmbeddedImageStatus: "idle",
+    excelEmbeddedImageErrorMessage: "",
     syncStatus: "idle",
     syncErrorMessage: "",
     lastSyncedAt: "",
@@ -264,6 +268,9 @@ export const usePresetStore = defineStore("preset", {
         this.excelFilePath = ""
         this.presetRecords = await importPresetsFromExcel(file)
         this.activePresetId = this.presetRecords[0]?.id || ""
+        this.excelEmbeddedImages = []
+        this.excelEmbeddedImageStatus = "idle"
+        this.excelEmbeddedImageErrorMessage = ""
         this.syncStatus = "idle"
         this.syncErrorMessage = ""
         this.persistState()
@@ -292,6 +299,7 @@ export const usePresetStore = defineStore("preset", {
         this.excelFilePath = path
         this.presetRecords = importPresetsFromBytes(bytes)
         this.activePresetId = this.presetRecords[0]?.id || ""
+        await this.refreshEmbeddedImagesFromBoundExcel()
         this.syncStatus = "saved"
         this.syncErrorMessage = ""
         this.lastSyncedAt = new Date().toISOString()
@@ -313,6 +321,34 @@ export const usePresetStore = defineStore("preset", {
         return false
 
       return this.bindExcelFilePath(this.excelFilePath)
+    },
+
+    async refreshEmbeddedImagesFromBoundExcel() {
+      if (!isTauriApp() || !this.excelFilePath) {
+        this.excelEmbeddedImages = []
+        this.excelEmbeddedImageStatus = "idle"
+        this.excelEmbeddedImageErrorMessage = ""
+        return []
+      }
+
+      try {
+        this.excelEmbeddedImageStatus = "loading"
+        this.excelEmbeddedImageErrorMessage = ""
+        const images = await extractExcelEmbeddedImages(this.excelFilePath)
+
+        this.excelEmbeddedImages = images
+        this.excelEmbeddedImageStatus = "ready"
+
+        return images
+      }
+      catch (error) {
+        this.excelEmbeddedImages = []
+        this.excelEmbeddedImageStatus = "error"
+        this.excelEmbeddedImageErrorMessage
+          = error?.message || "Excel 嵌入图片提取失败"
+
+        return []
+      }
     },
 
     async syncBoundExcelFile() {

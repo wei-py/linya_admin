@@ -1,6 +1,8 @@
 <script setup>
+import Panzoom from "@panzoom/panzoom"
+import { convertFileSrc } from "@tauri-apps/api/core"
 import { storeToRefs } from "pinia"
-import { computed, reactive, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue"
 
 import {
   createCalculationInputFields,
@@ -9,10 +11,18 @@ import {
 import { booleanValueOptions } from "@/constants/preset"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
+import { isTauriApp } from "@/utils/tauri/excel-file"
+import { saveImageAsset } from "@/utils/tauri/image-asset"
 
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
-const { activePresetId, presetRecords } = storeToRefs(presetStore)
+const {
+  activePresetId,
+  presetRecords,
+  excelEmbeddedImages,
+  excelEmbeddedImageStatus,
+  excelEmbeddedImageErrorMessage,
+} = storeToRefs(presetStore)
 const { templateTables } = storeToRefs(templateStore)
 
 const selectedPresetId = ref("")
@@ -22,6 +32,18 @@ const variationGroupSeed = ref(1)
 const variationOptionSeed = ref(1)
 const calculationDriver = ref("listPrice")
 const isPresetEditorOpen = ref(false)
+const imageFileInputRef = ref(null)
+const imageUploadErrorMessage = ref("")
+const imagePreviewDialogOpen = ref(false)
+const imagePreviewTitle = ref("")
+const imagePreviewSrc = ref("")
+const imagePreviewScale = ref(1)
+const previewViewportRef = ref(null)
+const previewImageRef = ref(null)
+const previewOpenedAt = ref(0)
+let previewPanzoom = null
+let previewWheelHandler = null
+let previewPanzoomChangeHandler = null
 
 const form = reactive({
   country: "",
@@ -44,6 +66,11 @@ const form = reactive({
     {
       id: "product_image_1",
       value: "",
+      previewUrl: "",
+      fileName: "",
+      source: "manual",
+      variationGroupId: "",
+      variationOptionId: "",
     },
   ],
   variationGroups: [],
@@ -174,6 +201,20 @@ const presetSummaryItems = computed(() =>
     .filter(Boolean),
 )
 
+const variationGroupOptions = computed(() =>
+  [
+    { title: "不关联", value: "" },
+    ...form.variationGroups.map((group, index) => ({
+      title: group.name || `变体 ${index + 1}`,
+      value: group.id,
+    })),
+  ],
+)
+
+const hasExcelEmbeddedImages = computed(
+  () => excelEmbeddedImages.value.length > 0,
+)
+
 function createExtraProductField() {
   const id = `product_extra_${Date.now()}_${extraProductFieldSeed.value}`
 
@@ -194,6 +235,11 @@ function createImageLink(value = "") {
   return {
     id,
     value,
+    previewUrl: "",
+    fileName: "",
+    source: "manual",
+    variationGroupId: "",
+    variationOptionId: "",
   }
 }
 
@@ -329,17 +375,352 @@ function addExtraProductField() {
 }
 
 function addImageLink() {
+  imageUploadErrorMessage.value = ""
   form.imageLinks.push(createImageLink())
 }
 
 function removeImageLink(id) {
+  const target = form.imageLinks.find(item => item.id === id)
+
+  if (target?.previewUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(target.previewUrl)
+  }
+
   if (form.imageLinks.length === 1) {
     form.imageLinks[0].value = ""
+    form.imageLinks[0].previewUrl = ""
+    form.imageLinks[0].fileName = ""
+    form.imageLinks[0].source = "manual"
+    form.imageLinks[0].variationGroupId = ""
+    form.imageLinks[0].variationOptionId = ""
     return
   }
 
   form.imageLinks = form.imageLinks.filter(item => item.id !== id)
 }
+
+function getImagePreviewSrc(image) {
+  if (image?.previewUrl) {
+    return image.previewUrl
+  }
+
+  const value = String(image?.value ?? "").trim()
+
+  if (
+    ["local", "excel"].includes(image?.source)
+    && value
+    && isTauriApp()
+  ) {
+    return convertFileSrc(value)
+  }
+
+  if (/^(?:https?:\/\/|data:image\/|blob:)/i.test(value)) {
+    return value
+  }
+
+  return ""
+}
+
+function getEmbeddedExcelImagePreviewSrc(asset) {
+  if (!asset?.filePath || !isTauriApp()) {
+    return ""
+  }
+
+  return convertFileSrc(asset.filePath)
+}
+
+function openImagePreview(src, title = "图片预览") {
+  if (!src) {
+    return
+  }
+
+  imagePreviewSrc.value = src
+  imagePreviewTitle.value = title
+  imagePreviewScale.value = 1
+  previewOpenedAt.value = Date.now()
+  imagePreviewDialogOpen.value = true
+}
+
+function openEmbeddedExcelImagePreview(asset) {
+  openImagePreview(
+    getEmbeddedExcelImagePreviewSrc(asset),
+    `${asset.sheetName} · ${asset.cell}`,
+  )
+}
+
+function openProductImagePreview(image, index) {
+  openImagePreview(
+    getImagePreviewSrc(image),
+    image.fileName || `图片 ${index + 1}`,
+  )
+}
+
+function zoomInPreviewImage() {
+  previewPanzoom?.zoomIn()
+}
+
+function zoomOutPreviewImage() {
+  previewPanzoom?.zoomOut()
+}
+
+function resetPreviewImageScale() {
+  previewPanzoom?.reset({ animate: false })
+  imagePreviewScale.value = 1
+}
+
+function destroyPreviewPanzoom() {
+  if (previewViewportRef.value && previewWheelHandler) {
+    previewViewportRef.value.removeEventListener("wheel", previewWheelHandler)
+  }
+
+  if (previewImageRef.value && previewPanzoomChangeHandler) {
+    previewImageRef.value.removeEventListener(
+      "panzoomchange",
+      previewPanzoomChangeHandler,
+    )
+  }
+
+  previewWheelHandler = null
+  previewPanzoomChangeHandler = null
+
+  if (previewPanzoom) {
+    previewPanzoom.destroy()
+    previewPanzoom = null
+  }
+}
+
+function initializePreviewPanzoom() {
+  if (
+    !imagePreviewDialogOpen.value
+    || !previewImageRef.value
+    || !previewViewportRef.value
+  ) {
+    return
+  }
+
+  destroyPreviewPanzoom()
+
+  previewPanzoom = Panzoom(previewImageRef.value, {
+    maxScale: 4,
+    minScale: 0.25,
+    step: 0.25,
+    cursor: "grab",
+    contain: "outside",
+  })
+
+  previewPanzoomChangeHandler = (event) => {
+    imagePreviewScale.value = event.detail.scale
+  }
+
+  previewImageRef.value.addEventListener(
+    "panzoomchange",
+    previewPanzoomChangeHandler,
+  )
+
+  previewWheelHandler = (event) => {
+    if (Date.now() - previewOpenedAt.value < 240) {
+      event.preventDefault()
+      return
+    }
+
+    event.preventDefault()
+    previewPanzoom?.zoomWithWheel(event)
+  }
+
+  previewViewportRef.value.addEventListener("wheel", previewWheelHandler, {
+    passive: false,
+  })
+
+  previewPanzoom.reset({ animate: false })
+  imagePreviewScale.value = previewPanzoom.getScale()
+}
+
+function getVariationOptionOptions(groupId) {
+  const target = form.variationGroups.find(item => item.id === groupId)
+
+  if (!target) {
+    return [{ title: "不关联", value: "" }]
+  }
+
+  return [
+    { title: "不关联", value: "" },
+    ...target.options.map((option, index) => ({
+      title: option.value || `选项 ${index + 1}`,
+      value: option.id,
+    })),
+  ]
+}
+
+function updateImageVariationGroup(image, groupId) {
+  image.variationGroupId = groupId || ""
+  image.variationOptionId = ""
+}
+
+function updateImageVariationOption(image, optionId) {
+  image.variationOptionId = optionId || ""
+}
+
+function handleUseEmbeddedExcelImage(asset) {
+  const existed = form.imageLinks.some(image => image.value === asset.filePath)
+
+  if (existed) {
+    return
+  }
+
+  applyImageLinkPayload({
+    value: asset.filePath,
+    previewUrl: "",
+    fileName: asset.fileName,
+    source: "excel",
+  })
+}
+
+function openImagePicker() {
+  imageFileInputRef.value?.click?.()
+}
+
+function applyImageLinkPayload(payload) {
+  const shouldReuseEmptyRow
+    = form.imageLinks.length === 1
+      && !form.imageLinks[0].value
+      && !form.imageLinks[0].previewUrl
+
+  if (shouldReuseEmptyRow) {
+    const target = form.imageLinks[0]
+
+    target.value = payload.value
+    target.previewUrl = payload.previewUrl
+    target.fileName = payload.fileName
+    target.source = payload.source
+
+    return
+  }
+
+  const nextImage = createImageLink(payload.value)
+
+  nextImage.previewUrl = payload.previewUrl
+  nextImage.fileName = payload.fileName
+  nextImage.source = payload.source
+  form.imageLinks.push(nextImage)
+}
+
+async function handleImageFileSelection(event) {
+  const input = event?.target
+  const files = Array.from(input?.files || [])
+
+  if (!files.length) {
+    return
+  }
+
+  imageUploadErrorMessage.value = ""
+
+  for (const file of files) {
+    let previewUrl = ""
+
+    try {
+      previewUrl = URL.createObjectURL(file)
+
+      if (isTauriApp()) {
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        const savedImage = await saveImageAsset(bytes, file.name)
+
+        applyImageLinkPayload({
+          value: savedImage.filePath,
+          previewUrl,
+          fileName: savedImage.fileName,
+          source: "local",
+        })
+      }
+      else {
+        applyImageLinkPayload({
+          value: previewUrl,
+          previewUrl,
+          fileName: file.name,
+          source: "upload",
+        })
+      }
+    }
+    catch (error) {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+
+      imageUploadErrorMessage.value = error?.message || "图片保存失败"
+      break
+    }
+  }
+
+  if (input) {
+    input.value = ""
+  }
+}
+
+onBeforeUnmount(() => {
+  destroyPreviewPanzoom()
+  form.imageLinks.forEach((image) => {
+    if (image.previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(image.previewUrl)
+    }
+  })
+})
+
+watch(
+  () =>
+    form.variationGroups.map(group => ({
+      id: group.id,
+      optionIds: group.options.map(option => option.id),
+    })),
+  (groups) => {
+    const groupIds = new Set(groups.map(group => group.id))
+    const optionIdsByGroup = new Map(
+      groups.map(group => [group.id, new Set(group.optionIds)]),
+    )
+
+    form.imageLinks.forEach((image) => {
+      if (!image.variationGroupId) {
+        image.variationOptionId = ""
+        return
+      }
+
+      if (!groupIds.has(image.variationGroupId)) {
+        image.variationGroupId = ""
+        image.variationOptionId = ""
+        return
+      }
+
+      const optionIds = optionIdsByGroup.get(image.variationGroupId)
+
+      if (!image.variationOptionId || optionIds?.has(image.variationOptionId)) {
+        return
+      }
+
+      image.variationOptionId = ""
+    })
+  },
+  { deep: true },
+)
+
+watch(imagePreviewDialogOpen, (isOpen) => {
+  if (isOpen) {
+    nextTick(() => {
+      initializePreviewPanzoom()
+    })
+    return
+  }
+
+  destroyPreviewPanzoom()
+  imagePreviewScale.value = 1
+})
+
+watch(imagePreviewSrc, () => {
+  if (!imagePreviewDialogOpen.value) {
+    return
+  }
+
+  nextTick(() => {
+    initializePreviewPanzoom()
+  })
+})
 
 function addVariationGroup() {
   form.variationGroups.push(createVariationGroup())
@@ -1082,8 +1463,17 @@ function setCalculationDriver(key) {
             </div>
 
             <div class="grid gap-2.5">
+              <input
+                ref="imageFileInputRef"
+                type="file"
+                accept="image/*"
+                multiple
+                class="hidden"
+                @change="handleImageFileSelection"
+              >
+
               <div class="workspace-subsection-header">
-                <div class="workspace-subsection-title">图片链接</div>
+                <div class="workspace-subsection-title">图片</div>
                 <div class="flex items-center gap-3">
                   <div class="workspace-subsection-meta">
                     {{ form.imageLinks.length }}
@@ -1091,42 +1481,203 @@ function setCalculationDriver(key) {
                   <VBtn
                     variant="tonal"
                     size="small"
+                    @click="openImagePicker"
+                  >
+                    上传图片
+                  </VBtn>
+                  <VBtn
+                    variant="tonal"
+                    size="small"
                     @click="addImageLink"
                   >
-                    添加图片
+                    添加链接
                   </VBtn>
                 </div>
               </div>
 
               <div class="grid gap-2.5">
                 <div
+                  v-if="
+                    excelEmbeddedImageStatus === 'loading'
+                      || excelEmbeddedImageErrorMessage
+                      || hasExcelEmbeddedImages
+                  "
+                  class="grid gap-2.5"
+                >
+                  <div class="workspace-subsection-header">
+                    <div class="workspace-subsection-title">已同步 Excel 图片</div>
+                    <div class="workspace-subsection-meta">
+                      {{ excelEmbeddedImages.length }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="excelEmbeddedImageStatus === 'loading'"
+                    class="text-[12px] text-[#525252]"
+                  >
+                    正在读取 Excel 嵌入图片…
+                  </div>
+
+                  <div
+                    v-else-if="excelEmbeddedImageErrorMessage"
+                    class="text-[12px] text-[#da1e28]"
+                  >
+                    {{ excelEmbeddedImageErrorMessage }}
+                  </div>
+
+                  <div
+                    v-else
+                    class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3"
+                  >
+                    <div
+                      v-for="asset in excelEmbeddedImages"
+                      :key="
+                        `${asset.sheetPath}:${asset.cell}:${asset.sourcePath}`
+                      "
+                      class="border border-[#c6c6c6] bg-[#ffffff] p-2.5"
+                    >
+                      <button
+                        type="button"
+                        class="
+                          flex aspect-square w-full items-center justify-center
+                          overflow-hidden border border-[#c6c6c6] bg-[#f8f8f8]
+                        "
+                        @click="openEmbeddedExcelImagePreview(asset)"
+                      >
+                        <img
+                          :src="getEmbeddedExcelImagePreviewSrc(asset)"
+                          :alt="asset.fileName"
+                          class="h-full w-full object-cover"
+                        >
+                      </button>
+                      <div class="mt-2 text-[12px] font-medium text-[#161616]">
+                        {{ asset.sheetName }} · {{ asset.cell }}
+                      </div>
+                      <div class="mt-0.5 text-[11px] text-[#6f6f6f]">
+                        {{ asset.fileName }}
+                      </div>
+                      <VBtn
+                        variant="tonal"
+                        size="small"
+                        class="mt-2"
+                        @click="handleUseEmbeddedExcelImage(asset)"
+                      >
+                        加入当前商品
+                      </VBtn>
+                    </div>
+                  </div>
+                </div>
+
+                <div
                   v-for="(image, index) in form.imageLinks"
                   :key="image.id"
-                  class="relative"
+                  class="grid gap-2.5 md:grid-cols-[96px,minmax(0,1fr)]"
                 >
-                  <VBtn
-                    color="error"
-                    variant="text"
-                    size="small"
-                    density="compact"
-                    class="!absolute right-1 top-1 z-10 min-w-0 px-1.5"
-                    @click="removeImageLink(image.id)"
+                  <button
+                    type="button"
+                    class="
+                      flex h-24 items-center justify-center border
+                      border-[#c6c6c6] bg-[#ffffff]
+                    "
+                    @click="openProductImagePreview(image, index)"
                   >
-                    删除
-                  </VBtn>
-                  <div class="surface-field surface-field--compact pr-12">
-                    <div class="surface-field__label">
-                      图片链接 {{ index + 1 }}
+                    <img
+                      v-if="getImagePreviewSrc(image)"
+                      :src="getImagePreviewSrc(image)"
+                      :alt="`图片 ${index + 1}`"
+                      class="h-full w-full object-cover"
+                    >
+                    <div v-else class="text-[11px] text-[#6f6f6f]">
+                      预览
                     </div>
-                    <VTextField
-                      v-model="image.value"
-                      class="surface-field__control"
-                      placeholder="输入图片路径或 URL"
-                      variant="plain"
-                      hide-details
+                  </button>
+
+                  <div class="relative">
+                    <VBtn
+                      color="error"
+                      variant="text"
+                      size="small"
                       density="compact"
-                    />
+                      class="!absolute right-1 top-1 z-10 min-w-0 px-1.5"
+                      @click="removeImageLink(image.id)"
+                    >
+                      删除
+                    </VBtn>
+                    <div class="surface-field surface-field--compact pr-12">
+                      <div class="surface-field__label">
+                        图片地址 {{ index + 1 }}
+                      </div>
+                      <VTextField
+                        v-model="image.value"
+                        class="surface-field__control"
+                        placeholder="输入图片路径或 URL"
+                        variant="plain"
+                        hide-details
+                        density="compact"
+                      />
+                      <div
+                        v-if="
+                          image.fileName
+                            || ['local', 'excel'].includes(image.source)
+                        "
+                        class="mt-1 text-[11px] text-[#6f6f6f]"
+                      >
+                        {{
+                          image.source === "local"
+                            ? `已保存到本地图片库 · ${image.fileName || "图片"}`
+                            : image.source === "excel"
+                              ? `来自 Excel · ${image.fileName || "图片"}`
+                              : image.fileName
+                        }}
+                      </div>
+                    </div>
+
+                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div class="surface-field surface-field--compact">
+                        <div class="surface-field__label">关联变体</div>
+                        <VSelect
+                          :model-value="image.variationGroupId"
+                          :items="variationGroupOptions"
+                          item-title="title"
+                          item-value="value"
+                          class="surface-field__control"
+                          variant="plain"
+                          hide-details
+                          density="compact"
+                          @update:model-value="
+                            (value) => updateImageVariationGroup(image, value)
+                          "
+                        />
+                      </div>
+
+                      <div class="surface-field surface-field--compact">
+                        <div class="surface-field__label">关联选项</div>
+                        <VSelect
+                          :model-value="image.variationOptionId"
+                          :items="
+                            getVariationOptionOptions(image.variationGroupId)
+                          "
+                          item-title="title"
+                          item-value="value"
+                          class="surface-field__control"
+                          variant="plain"
+                          hide-details
+                          density="compact"
+                          :disabled="!image.variationGroupId"
+                          @update:model-value="
+                            (value) => updateImageVariationOption(image, value)
+                          "
+                        />
+                      </div>
+                    </div>
                   </div>
+                </div>
+
+                <div
+                  v-if="imageUploadErrorMessage"
+                  class="text-[12px] text-[#da1e28]"
+                >
+                  {{ imageUploadErrorMessage }}
                 </div>
               </div>
             </div>
@@ -1609,4 +2160,65 @@ function setCalculationDriver(key) {
       </div>
     </div>
   </div>
+
+  <VDialog v-model="imagePreviewDialogOpen" max-width="960">
+    <VCard
+      class="workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white"
+    >
+      <div class="workspace-panel-header">
+        <div class="workspace-panel-title">
+          {{ imagePreviewTitle || "图片预览" }}
+        </div>
+        <div class="flex items-center gap-1.5">
+          <div class="text-[12px] text-[#525252]">
+            {{ Math.round(imagePreviewScale * 100) }}%
+          </div>
+          <VBtn
+            icon="mdi-magnify-minus-outline"
+            variant="text"
+            size="small"
+            @click="zoomOutPreviewImage"
+          />
+          <VBtn
+            variant="text"
+            size="small"
+            class="min-w-[48px]"
+            @click="resetPreviewImageScale"
+          >
+            1:1
+          </VBtn>
+          <VBtn
+            icon="mdi-magnify-plus-outline"
+            variant="text"
+            size="small"
+            @click="zoomInPreviewImage"
+          />
+          <VBtn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            @click="imagePreviewDialogOpen = false"
+          />
+        </div>
+      </div>
+      <div class="workspace-panel-body">
+        <div
+          ref="previewViewportRef"
+          class="
+            flex min-h-[320px] cursor-grab items-center justify-center border
+            border-[#c6c6c6] bg-[#f8f8f8] p-4
+          "
+        >
+          <img
+            v-if="imagePreviewSrc"
+            ref="previewImageRef"
+            :src="imagePreviewSrc"
+            :alt="imagePreviewTitle || '图片预览'"
+            class="max-h-[70vh] w-full object-contain"
+            @load="initializePreviewPanzoom"
+          >
+        </div>
+      </div>
+    </VCard>
+  </VDialog>
 </template>

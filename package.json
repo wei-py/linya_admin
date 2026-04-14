@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
+    "@panzoom/panzoom": "^4.6.2",
     "dayjs": "^1.11.13",
     "pinia": "^3.0.3",
     "vue": "^3.5.13",

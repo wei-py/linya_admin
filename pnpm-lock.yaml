@@ -11,6 +11,9 @@ importers:
       '@mdi/font':
         specifier: ^7.4.47
         version: 7.4.47
+      '@panzoom/panzoom':
+        specifier: ^4.6.2
+        version: 4.6.2
       dayjs:
         specifier: ^1.11.13
         version: 1.11.20
@@ -593,6 +596,9 @@ packages:
 
   '@oxc-project/types@0.115.0':
     resolution: {integrity: sha512-4n91DKnebUS4yjUHl2g3/b2T+IUdCfmoZGhmwsovZCDaJSs+QkVAM+0AqqTxHSsHfeiMuueT75cZaZcT/m0pSw==}
+
+  '@panzoom/panzoom@4.6.2':
+    resolution: {integrity: sha512-Zn3B5/hwa6eYIPRSKX0xf2clv8nviTX8AnAU5kU/EugiTDhG41ya2wlBqYrZJYCWQROr/5XkWObZhIkepi89qw==}
 
   '@parcel/watcher-android-arm64@2.5.6':
     resolution: {integrity: sha512-YQxSS34tPF/6ZG7r/Ih9xy+kP/WwediEUsqmtf0cuCV5TPPKw/PQHRhueUo6JdeFJaqV3pyjm0GdYjZotbRt/A==}
@@ -3206,6 +3212,8 @@ snapshots:
     optional: true
 
   '@oxc-project/types@0.115.0': {}
+
+  '@panzoom/panzoom@4.6.2': {}
 
   '@parcel/watcher-android-arm64@2.5.6':
     optional: true
