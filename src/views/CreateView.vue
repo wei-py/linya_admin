@@ -9,13 +9,17 @@ import {
   createProductBaseFields,
 } from "@/constants/create"
 import { booleanValueOptions } from "@/constants/preset"
+import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
 import { isTauriApp } from "@/utils/tauri/excel-file"
 import { saveImageAsset } from "@/utils/tauri/image-asset"
 
+const CREATE_VIEW_DRAFT_STORAGE_KEY = "create:view:draft"
+
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
+const optionsStore = useOptionsStore()
 const {
   activePresetId,
   presetRecords,
@@ -24,6 +28,11 @@ const {
   excelEmbeddedImageErrorMessage,
 } = storeToRefs(presetStore)
 const { templateTables } = storeToRefs(templateStore)
+const {
+  adTypeOptions,
+  categoryOptions,
+  shippingIncludedOptions,
+} = storeToRefs(optionsStore)
 
 const selectedPresetId = ref("")
 const extraProductFieldSeed = ref(1)
@@ -31,7 +40,6 @@ const imageLinkSeed = ref(2)
 const variationGroupSeed = ref(1)
 const variationOptionSeed = ref(1)
 const calculationDriver = ref("listPrice")
-const isPresetEditorOpen = ref(false)
 const imageFileInputRef = ref(null)
 const imageUploadErrorMessage = ref("")
 const imagePreviewDialogOpen = ref(false)
@@ -44,6 +52,8 @@ const previewOpenedAt = ref(0)
 let previewPanzoom = null
 let previewWheelHandler = null
 let previewPanzoomChangeHandler = null
+let hasRestoredCreateDraft = false
+let isRestoringCreateDraft = false
 
 const form = reactive({
   country: "",
@@ -60,6 +70,7 @@ const form = reactive({
   weight: "",
   category: "",
   adType: "",
+  shippingIncluded: "",
   notes: "",
   presetItems: [],
   imageLinks: [
@@ -90,16 +101,6 @@ const selectedPresetRecord = computed(() =>
 )
 
 const hasPresetRecords = computed(() => presetRecords.value.length > 0)
-const presetPrimaryFieldNames = [
-  "折扣",
-  "活动费率",
-  "交易费率",
-  "提现费率",
-  "税率",
-  "贴单费用",
-  "是否包邮",
-  "汇损",
-]
 const presetSummaryFieldNames = [
   "折扣",
   "活动费率",
@@ -164,20 +165,6 @@ const calculationCostFields = computed(() =>
   ),
 )
 
-const presetPrimaryItems = computed(() =>
-  form.presetItems
-    .filter(item => presetPrimaryFieldNames.includes(item.name))
-    .sort(
-      (left, right) =>
-        presetPrimaryFieldNames.indexOf(left.name)
-        - presetPrimaryFieldNames.indexOf(right.name),
-    ),
-)
-
-const presetSecondaryItems = computed(() =>
-  form.presetItems.filter(item => !presetPrimaryFieldNames.includes(item.name)),
-)
-
 const presetSummaryItems = computed(() =>
   presetSummaryFieldNames
     .map((name) => {
@@ -194,6 +181,7 @@ const presetSummaryItems = computed(() =>
 
       return {
         id: item.id,
+        item,
         label: item.name,
         value: item.unit ? `${value} ${item.unit}` : value,
       }
@@ -294,6 +282,7 @@ function resetPresetSnapshot() {
   form.country = ""
   form.platform = ""
   form.presetItems = []
+  form.shippingIncluded = ""
 }
 
 function applyPresetRecord(record) {
@@ -305,6 +294,13 @@ function applyPresetRecord(record) {
   form.country = record.country
   form.platform = record.platform
   form.presetItems = (record.items || []).map(createPresetSnapshotItem)
+  form.shippingIncluded = findPresetDefaultShippingValue(form.presetItems)
+}
+
+function findPresetDefaultShippingValue(items = form.presetItems) {
+  const value = items.find(item => item.name === "是否包邮")?.value || ""
+
+  return ["是", "否"].includes(value) ? value : ""
 }
 
 function ensureSelectedPreset() {
@@ -329,9 +325,20 @@ watch([presetRecords, activePresetId], ensureSelectedPreset, {
 })
 
 watch(
+  presetRecords,
+  () => {
+    restoreCreateDraft()
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
   selectedPresetRecord,
   (record) => {
-    isPresetEditorOpen.value = false
+    if (isRestoringCreateDraft) {
+      return
+    }
+
     applyPresetRecord(record)
   },
   { immediate: true },
@@ -339,6 +346,38 @@ watch(
 
 function resetPresetItemsFromSource() {
   applyPresetRecord(selectedPresetRecord.value)
+}
+
+function resetProductFormFields() {
+  form.listPrice = ""
+  form.discountPrice = ""
+  form.revenue = ""
+  form.profitRate = ""
+  form.netProfit = ""
+  form.sellerShipping = ""
+  form.fixedSurcharge = ""
+  form.styleNo = ""
+  form.cost = ""
+  form.weight = ""
+  form.category = ""
+  form.adType = ""
+  form.shippingIncluded = ""
+  form.notes = ""
+  form.extraProductFields = []
+  form.variationGroups = []
+  form.imageLinks.forEach((image) => {
+    if (image.previewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(image.previewUrl)
+    }
+  })
+  form.imageLinks = [createImageLink()]
+  calculationDriver.value = "listPrice"
+}
+
+function resetCreatePage() {
+  resetProductFormFields()
+  resetPresetItemsFromSource()
+  persistCreateDraft()
 }
 
 function updatePresetSnapshotItem(item, key, value) {
@@ -351,14 +390,149 @@ function updatePresetSnapshotItem(item, key, value) {
   item.rule_table_id = value === "rule" ? item.rule_table_id || "" : ""
 }
 
-function getPresetSnapshotTypeText(item) {
-  if (item.type === "boolean")
-    return "布尔值"
+function updatePresetSummaryValue(item, value) {
+  updatePresetSnapshotItem(item, "value", value)
 
-  if (item.type === "rule")
-    return "规则"
+  if (item.name === "是否包邮") {
+    form.shippingIncluded = value
+  }
+}
 
-  return "数值"
+function serializeImageLink(image) {
+  return {
+    id: image.id,
+    value: image.value,
+    previewUrl: image.previewUrl?.startsWith("blob:") ? "" : image.previewUrl,
+    fileName: image.fileName,
+    source: image.source,
+    variationGroupId: image.variationGroupId,
+    variationOptionId: image.variationOptionId,
+  }
+}
+
+function createDraftPayload() {
+  return {
+    selectedPresetId: selectedPresetId.value,
+    calculationDriver: calculationDriver.value,
+    form: {
+      listPrice: form.listPrice,
+      discountPrice: form.discountPrice,
+      revenue: form.revenue,
+      profitRate: form.profitRate,
+      netProfit: form.netProfit,
+      fixedSurcharge: form.fixedSurcharge,
+      styleNo: form.styleNo,
+      cost: form.cost,
+      weight: form.weight,
+      category: form.category,
+      adType: form.adType,
+      shippingIncluded: form.shippingIncluded,
+      notes: form.notes,
+      presetItems: form.presetItems.map(item => ({ ...item })),
+      imageLinks: form.imageLinks.map(serializeImageLink),
+      variationGroups: form.variationGroups.map(group => ({
+        id: group.id,
+        name: group.name,
+        options: group.options.map(option => ({
+          id: option.id,
+          value: option.value,
+        })),
+      })),
+      extraProductFields: form.extraProductFields.map(field => ({ ...field })),
+    },
+  }
+}
+
+function persistCreateDraft() {
+  if (isRestoringCreateDraft) {
+    return
+  }
+
+  localStorage.setItem(
+    CREATE_VIEW_DRAFT_STORAGE_KEY,
+    JSON.stringify(createDraftPayload()),
+  )
+}
+
+function restoreCreateDraft() {
+  if (hasRestoredCreateDraft || !presetRecords.value.length) {
+    return
+  }
+
+  hasRestoredCreateDraft = true
+
+  const rawDraft = localStorage.getItem(CREATE_VIEW_DRAFT_STORAGE_KEY)
+
+  if (!rawDraft) {
+    return
+  }
+
+  try {
+    const draft = JSON.parse(rawDraft)
+    const nextPresetId = presetRecords.value.some(
+      item => item.id === draft?.selectedPresetId,
+    )
+      ? draft.selectedPresetId
+      : selectedPresetId.value
+
+    isRestoringCreateDraft = true
+
+    if (nextPresetId) {
+      selectedPresetId.value = nextPresetId
+    }
+
+    const draftForm = draft?.form || {}
+
+    form.listPrice = draftForm.listPrice || ""
+    form.discountPrice = draftForm.discountPrice || ""
+    form.revenue = draftForm.revenue || ""
+    form.profitRate = draftForm.profitRate || ""
+    form.netProfit = draftForm.netProfit || ""
+    form.fixedSurcharge = draftForm.fixedSurcharge || ""
+    form.styleNo = draftForm.styleNo || ""
+    form.cost = draftForm.cost || ""
+    form.weight = draftForm.weight || ""
+    form.category = draftForm.category || ""
+    form.adType = draftForm.adType || ""
+    form.shippingIncluded = draftForm.shippingIncluded || ""
+    form.notes = draftForm.notes || ""
+    form.presetItems = Array.isArray(draftForm.presetItems)
+      ? draftForm.presetItems.map(createPresetSnapshotItem)
+      : form.presetItems
+    form.imageLinks
+      = Array.isArray(draftForm.imageLinks) && draftForm.imageLinks.length
+        ? draftForm.imageLinks.map(image => ({
+            ...createImageLink(),
+            ...image,
+          }))
+        : [createImageLink()]
+    form.variationGroups = Array.isArray(draftForm.variationGroups)
+      ? draftForm.variationGroups.map(group => ({
+          id: group.id || createVariationGroup().id,
+          name: group.name || "",
+          options: Array.isArray(group.options) && group.options.length
+            ? group.options.map(option => ({
+                id: option.id || createVariationOption().id,
+                value: option.value || "",
+              }))
+            : [createVariationOption()],
+        }))
+      : []
+    form.extraProductFields = Array.isArray(draftForm.extraProductFields)
+      ? draftForm.extraProductFields.map(field => ({
+          id: field.id || createExtraProductField().id,
+          label: field.label || "",
+          value: field.value || "",
+        }))
+      : []
+    calculationDriver.value = draft?.calculationDriver || "listPrice"
+  }
+  catch {
+    localStorage.removeItem(CREATE_VIEW_DRAFT_STORAGE_KEY)
+  }
+  finally {
+    isRestoringCreateDraft = false
+  }
 }
 
 function getPresetSnapshotRuleName(item) {
@@ -722,6 +896,14 @@ watch(imagePreviewSrc, () => {
   })
 })
 
+watch(
+  () => createDraftPayload(),
+  () => {
+    persistCreateDraft()
+  },
+  { deep: true },
+)
+
 function addVariationGroup() {
   form.variationGroups.push(createVariationGroup())
 }
@@ -785,6 +967,10 @@ function findPresetSnapshotValue(name) {
   return form.presetItems.find(item => item.name === name)?.value || ""
 }
 
+function findPresetSnapshotItem(name) {
+  return form.presetItems.find(item => item.name === name) || null
+}
+
 function findPresetSnapshotNumber(name) {
   return toNumber(findPresetSnapshotValue(name))
 }
@@ -799,13 +985,82 @@ function findPresetMoneyUnit() {
   )?.unit || ""
 }
 
+function getCurrentShippingIncludedValue() {
+  return form.shippingIncluded || findPresetDefaultShippingValue() || ""
+}
+
+function parseRangeUpperBound(value) {
+  const normalized = String(value ?? "").trim()
+
+  if (!normalized || normalized === "最后区间及以上") {
+    return Number.POSITIVE_INFINITY
+  }
+
+  const nextValue = Number(normalized)
+
+  return Number.isFinite(nextValue) ? nextValue : Number.POSITIVE_INFINITY
+}
+
+function lookupRange2DTableValue(tableId, xValue, yValue) {
+  const table = templateTables.value.find(item => item.id === tableId)
+
+  if (!table || table.ruleType !== "range_2d") {
+    return 0
+  }
+
+  const columns = Array.isArray(table.columns) ? table.columns : []
+  const rows = Array.isArray(table.rows) ? table.rows : []
+
+  if (!columns.length || !rows.length) {
+    return 0
+  }
+
+  const targetColumn
+    = columns.find(column => xValue <= parseRangeUpperBound(column.label))
+      || columns[columns.length - 1]
+  const targetRow
+    = rows.find(row => yValue <= parseRangeUpperBound(row.label))
+      || rows[rows.length - 1]
+
+  return toNumber(targetRow?.values?.[targetColumn?.id])
+}
+
+const resolvedSellerShipping = computed(() => {
+  const shippingRuleItem = findPresetSnapshotItem("卖家支付运费")
+  const shippingIncluded = getCurrentShippingIncludedValue()
+  const discountRate = findPresetSnapshotNumber("折扣")
+  const discountFactor = 1 - discountRate / 100
+  const lookupDiscountPrice
+    = calculationDriver.value === "discountPrice"
+      ? toNumber(form.discountPrice)
+      : calculationDriver.value === "revenue"
+        ? toNumber(form.revenue)
+        : calculationDriver.value === "listPrice"
+          ? toNumber(form.listPrice) * discountFactor
+          : toNumber(form.discountPrice)
+
+  if (shippingIncluded === "是") {
+    return 0
+  }
+
+  if (!shippingRuleItem?.rule_table_id) {
+    return 0
+  }
+
+  return lookupRange2DTableValue(
+    shippingRuleItem.rule_table_id,
+    lookupDiscountPrice,
+    toNumber(form.weight),
+  )
+})
+
 const calculationSnapshot = computed(() => {
   const baseListPrice = toNumber(form.listPrice)
   const baseDiscountPrice = toNumber(form.discountPrice)
   const baseRevenue = toNumber(form.revenue)
   const baseProfitRate = toNumber(form.profitRate)
   const baseNetProfit = toNumber(form.netProfit)
-  const sellerShipping = toNumber(form.sellerShipping)
+  const sellerShipping = resolvedSellerShipping.value
   const fixedSurcharge = toNumber(form.fixedSurcharge)
   const cost = toNumber(form.cost)
   const discountRate = findPresetSnapshotNumber("折扣")
@@ -893,7 +1148,8 @@ const calculationSnapshot = computed(() => {
     revenue,
     netProfit,
     profitRate,
-    shippingIncluded: findPresetSnapshotValue("是否包邮") || "未设置",
+    shippingDefault: findPresetDefaultShippingValue() || "未设置",
+    shippingIncluded: getCurrentShippingIncludedValue() || "未设置",
   }
 })
 
@@ -968,8 +1224,12 @@ const resultSummaryItems = computed(() => [
     ),
   },
   {
-    label: "包邮",
+    label: "商品是否包邮",
     value: calculationSnapshot.value.shippingIncluded,
+  },
+  {
+    label: "预设是否包邮",
+    value: calculationSnapshot.value.shippingDefault,
   },
 ])
 
@@ -1041,6 +1301,10 @@ const feeSummaryItems = computed(() => [
 ])
 
 function getCalculationFieldValue(key) {
+  if (key === "sellerShipping") {
+    return formatEditableNumber(resolvedSellerShipping.value)
+  }
+
   if (key === "listPrice") {
     return calculationDriver.value === "listPrice"
       ? form.listPrice
@@ -1166,19 +1430,11 @@ function setCalculationDriver(key) {
             <div class="flex items-center gap-2">
               <VBtn
                 v-if="selectedPresetRecord"
-                variant="tonal"
-                size="small"
-                @click="isPresetEditorOpen = !isPresetEditorOpen"
-              >
-                {{ isPresetEditorOpen ? "收起参数" : "编辑参数" }}
-              </VBtn>
-              <VBtn
-                v-if="selectedPresetRecord && isPresetEditorOpen"
                 variant="text"
                 size="small"
-                @click="resetPresetItemsFromSource"
+                @click="resetCreatePage"
               >
-                重置
+                重置页面
               </VBtn>
             </div>
           </div>
@@ -1246,7 +1502,36 @@ function setCalculationDriver(key) {
                   <div class="text-xs text-[#525252]">
                     {{ item.label }}
                   </div>
-                  <div class="mt-1 text-sm font-medium text-[#161616]">
+                  <VSelect
+                    v-if="item.item.type === 'boolean'"
+                    :model-value="item.item.value"
+                    :items="booleanValueOptions"
+                    item-title="title"
+                    item-value="value"
+                    class="mt-1"
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                    @update:model-value="
+                      value => updatePresetSummaryValue(item.item, value)
+                    "
+                  />
+                  <VTextField
+                    v-else-if="item.item.type === 'number'"
+                    :model-value="item.item.value"
+                    class="mt-1"
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                    :suffix="item.item.unit || undefined"
+                    @update:model-value="
+                      value => updatePresetSummaryValue(item.item, value)
+                    "
+                  />
+                  <div
+                    v-else
+                    class="mt-1 text-sm font-medium text-[#161616]"
+                  >
                     {{ item.value }}
                   </div>
                 </div>
@@ -1257,137 +1542,6 @@ function setCalculationDriver(key) {
                 class="workspace-empty-state workspace-empty-state--tight"
               >
                 暂无关键参数。
-              </div>
-            </div>
-
-            <div
-              v-if="isPresetEditorOpen && presetPrimaryItems.length"
-              class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-            >
-              <div
-                v-for="item in presetPrimaryItems"
-                :key="item.id"
-                class="border-b border-[#e0e0e0] pb-2"
-              >
-                <div class="text-sm font-medium text-[#161616]">
-                  {{ item.name || "未命名字段" }}
-                </div>
-                <div class="mb-1.5 mt-0.5 text-xs text-[#525252]">
-                  {{ item.unit || getPresetSnapshotTypeText(item) }}
-                </div>
-                <div class="min-w-0">
-                  <VSelect
-                    v-if="item.type === 'boolean'"
-                    :model-value="item.value"
-                    :items="booleanValueOptions"
-                    item-title="title"
-                    item-value="value"
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    @update:model-value="
-                      (value) => updatePresetSnapshotItem(item, 'value', value)
-                    "
-                  />
-                  <VTextField
-                    v-else-if="item.type === 'rule'"
-                    :model-value="
-                      getPresetSnapshotRuleName(item) || '未绑定规则表'
-                    "
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    readonly
-                  />
-                  <VTextField
-                    v-else
-                    :model-value="item.value"
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    :suffix="item.unit || undefined"
-                    placeholder="输入数值"
-                    @update:model-value="
-                      (value) => updatePresetSnapshotItem(item, 'value', value)
-                    "
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="isPresetEditorOpen && presetSecondaryItems.length"
-              class="border-t border-[#e0e0e0]"
-            >
-              <div
-                class="
-                  hidden border-b border-[#e0e0e0] py-2 text-xs text-[#525252]
-                  md:grid md:grid-cols-[minmax(0,1fr),88px,200px] md:gap-3
-                "
-              >
-                <div>字段</div>
-                <div>类型</div>
-                <div>值</div>
-              </div>
-              <div
-                v-for="item in presetSecondaryItems"
-                :key="item.id"
-                class="
-                  grid gap-3 border-b border-[#e0e0e0] py-3
-                  md:grid-cols-[minmax(0,1fr),88px,200px]
-                  md:items-center
-                "
-              >
-                <div class="min-w-0">
-                  <div class="text-sm font-medium text-[#161616]">
-                    {{ item.name || "未命名字段" }}
-                  </div>
-                  <div class="mt-1 text-xs text-[#525252]">
-                    {{ item.unit || "无单位" }}
-                  </div>
-                </div>
-
-                <div class="text-xs text-[#525252]">
-                  {{ getPresetSnapshotTypeText(item) }}
-                </div>
-
-                <div class="min-w-0">
-                  <VSelect
-                    v-if="item.type === 'boolean'"
-                    :model-value="item.value"
-                    :items="booleanValueOptions"
-                    item-title="title"
-                    item-value="value"
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    @update:model-value="
-                      (value) => updatePresetSnapshotItem(item, 'value', value)
-                    "
-                  />
-                  <VTextField
-                    v-else-if="item.type === 'rule'"
-                    :model-value="
-                      getPresetSnapshotRuleName(item) || '未绑定规则表'
-                    "
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    readonly
-                  />
-                  <VTextField
-                    v-else
-                    :model-value="item.value"
-                    variant="plain"
-                    hide-details
-                    density="compact"
-                    :suffix="item.unit || undefined"
-                    placeholder="输入数值"
-                    @update:model-value="
-                      (value) => updatePresetSnapshotItem(item, 'value', value)
-                    "
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -1429,7 +1583,18 @@ function setCalculationDriver(key) {
                 class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
+                <VAutocomplete
+                  v-if="field.key === 'category'"
+                  v-model="form[field.key]"
+                  :items="categoryOptions"
+                  class="surface-field__control"
+                  :placeholder="field.placeholder"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
                 <VTextField
+                  v-else
                   v-model="form[field.key]"
                   class="surface-field__control"
                   :placeholder="field.placeholder"
@@ -1450,7 +1615,35 @@ function setCalculationDriver(key) {
                 class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
+                <div
+                  v-if="field.key === 'shippingIncluded'"
+                  class="mb-1 text-[11px] text-[#6f6f6f]"
+                >
+                  默认来自预设里的“是否包邮”，这里表示当前商品实际状态。
+                </div>
+                <VSelect
+                  v-if="field.key === 'shippingIncluded'"
+                  v-model="form[field.key]"
+                  :items="shippingIncludedOptions"
+                  item-title="title"
+                  item-value="value"
+                  class="surface-field__control"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
+                <VSelect
+                  v-else-if="field.key === 'adType'"
+                  v-model="form[field.key]"
+                  :items="adTypeOptions"
+                  class="surface-field__control"
+                  :placeholder="field.placeholder"
+                  variant="plain"
+                  hide-details
+                  density="compact"
+                />
                 <VTextField
+                  v-else
                   v-model="form[field.key]"
                   class="surface-field__control"
                   :placeholder="field.placeholder"
@@ -1884,6 +2077,12 @@ function setCalculationDriver(key) {
                 class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
+                <div
+                  v-if="field.key === 'sellerShipping'"
+                  class="mb-1 text-[11px] text-[#6f6f6f]"
+                >
+                  由“当前包邮状态”和预设规则自动计算。
+                </div>
                 <VTextField
                   :model-value="getCalculationFieldValue(field.key)"
                   class="surface-field__control"
@@ -1893,8 +2092,12 @@ function setCalculationDriver(key) {
                   variant="plain"
                   hide-details
                   density="compact"
+                  :readonly="field.key === 'sellerShipping'"
                   @update:model-value="
-                    (value) => updateCalculationField(field.key, value)
+                    (value) =>
+                      field.key === 'sellerShipping'
+                        ? undefined
+                        : updateCalculationField(field.key, value)
                   "
                 />
               </div>

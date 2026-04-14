@@ -32,7 +32,7 @@ export const createCalculationInputFields = [
   {
     key: "sellerShipping",
     label: "卖家支付运费",
-    placeholder: "输入运费",
+    placeholder: "按规则自动计算",
     type: "number",
   },
   {

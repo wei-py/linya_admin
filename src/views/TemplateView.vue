@@ -11,9 +11,11 @@ import {
   templateRuleTypeMetaMap,
   templateRuleTypeOptions,
 } from "@/constants/template"
+import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
 
+const optionsStore = useOptionsStore()
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
 const {
@@ -22,6 +24,7 @@ const {
   activeTemplateTable,
   syncStatus,
 } = storeToRefs(templateStore)
+const { adTypeOptions, categoryOptions } = storeToRefs(optionsStore)
 
 const hasExcelBinding = computed(() =>
   Boolean(presetStore.hasBoundExcelFile),
@@ -35,6 +38,15 @@ const selectedRuleMeta = computed(() =>
     : null,
 )
 const templateBaseFieldCount = 7
+const isRange2DTable = computed(
+  () => selectedTable.value?.ruleType === "range_2d",
+)
+const isEnumPairTable = computed(
+  () => selectedTable.value?.ruleType === "enum_pair",
+)
+const isCommissionTable = computed(
+  () => selectedTable.value?.id === "ml_br_commission",
+)
 const templateRuleContentMetaText = computed(() => {
   if (!selectedTable.value) {
     return "0 项"
@@ -46,10 +58,17 @@ const templateRuleContentMetaText = computed(() => {
 
   return `${selectedTable.value.rows.length} 行`
 })
+const templateRuleContentDescription = computed(() => {
+  if (isRange2DTable.value) {
+    return "横向是售价区间，纵向是重量区间，每个单元格表示命中的结果值。"
+  }
 
-const isRange2DTable = computed(
-  () => selectedTable.value?.ruleType === "range_2d",
-)
+  if (isEnumPairTable.value) {
+    return "按两个离散值联合查结果。佣金表建议维护为 类目 + 广告类型 -> 佣金费率。"
+  }
+
+  return "按当前规则类型编辑每一行条件和值。"
+})
 const templateSyncStatusText = computed(() => {
   if (!hasExcelBinding.value) {
     return "未绑定 Excel"
@@ -106,12 +125,48 @@ function getRuleTableColumnStyle(columnKey) {
     return { width: "136px" }
   }
 
-  if (columnKey === "matchKey") {
+  if (["matchKey", "matchKey2"].includes(columnKey)) {
     return { width: "180px" }
   }
 
   return undefined
 }
+
+function getRuleTableColumns(table, ruleMeta) {
+  const columns = ruleMeta?.columns || []
+
+  if (!table || !columns.length) {
+    return columns
+  }
+
+  if (table.ruleType === "enum_pair" && table.id === "ml_br_commission") {
+    return columns.map((column) => {
+      if (column.key === "matchKey") {
+        return { ...column, label: "类目", placeholder: "例如 美妆个护" }
+      }
+
+      if (column.key === "matchKey2") {
+        return { ...column, label: "广告类型", placeholder: "例如 Clássico / Premium" }
+      }
+
+      if (column.key === "value") {
+        return { ...column, label: "佣金费率", placeholder: "例如 14" }
+      }
+
+      if (column.key === "remark") {
+        return { ...column, label: "备注", placeholder: "例如 官方后台查询结果" }
+      }
+
+      return column
+    })
+  }
+
+  return columns
+}
+
+const selectedRuleColumns = computed(() =>
+  getRuleTableColumns(selectedTable.value, selectedRuleMeta.value),
+)
 
 function getMatrixValueColumnStyle() {
   const columnCount = selectedTable.value?.columns.length || 0
@@ -171,6 +226,17 @@ function handleAddRow() {
   }
 
   selectedTable.value.rows.push(createTemplateRow(selectedTable.value.ruleType))
+  templateStore.persistTemplateChanges()
+}
+
+function handleAddEnumPairPresetRow(matchKey2 = "") {
+  if (!selectedTable.value || selectedTable.value.ruleType !== "enum_pair")
+    return
+
+  selectedTable.value.rows.push({
+    ...createTemplateRow("enum_pair"),
+    matchKey2,
+  })
   templateStore.persistTemplateChanges()
 }
 
@@ -428,14 +494,28 @@ watch(
                   </div>
                 </div>
                 <div class="mt-0.5 text-sm text-[#525252]">
-                  {{
-                    isRange2DTable
-                      ? "横向是售价区间，纵向是重量区间，每个单元格表示命中的结果值。"
-                      : "按当前规则类型编辑每一行条件和值。"
-                  }}
+                  {{ templateRuleContentDescription }}
                 </div>
               </div>
               <div class="flex flex-wrap items-center gap-2">
+                <template v-if="isCommissionTable">
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    density="compact"
+                    @click="handleAddEnumPairPresetRow('Clássico')"
+                  >
+                    添加 Clássico
+                  </VBtn>
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    density="compact"
+                    @click="handleAddEnumPairPresetRow('Premium')"
+                  >
+                    添加 Premium
+                  </VBtn>
+                </template>
                 <VBtn
                   v-if="isRange2DTable"
                   variant="tonal"
@@ -627,7 +707,7 @@ watch(
               >
                 <colgroup>
                   <col
-                    v-for="column in selectedRuleMeta?.columns || []"
+                    v-for="column in selectedRuleColumns"
                     :key="column.key"
                     :style="getRuleTableColumnStyle(column.key)"
                   >
@@ -641,7 +721,7 @@ watch(
                     "
                   >
                     <th
-                      v-for="column in selectedRuleMeta?.columns || []"
+                      v-for="column in selectedRuleColumns"
                       :key="column.key"
                       class="border-r px-3 py-2 font-medium"
                     >
@@ -663,14 +743,39 @@ watch(
                     class="align-top hover:bg-[#f8f8f8]"
                   >
                     <td
-                      v-for="column in selectedRuleMeta?.columns || []"
+                      v-for="column in selectedRuleColumns"
                       :key="column.key"
                       class="border-r px-3"
                     >
+                      <VAutocomplete
+                        v-if="
+                          isCommissionTable
+                            && column.key === 'matchKey'
+                        "
+                        v-model="row[column.key]"
+                        :items="categoryOptions"
+                        :placeholder="column.placeholder || column.label"
+                        variant="plain"
+                        hide-details
+                        density="compact"
+                      />
+                      <VSelect
+                        v-else-if="
+                          isCommissionTable
+                            && column.key === 'matchKey2'
+                        "
+                        v-model="row[column.key]"
+                        :items="adTypeOptions"
+                        :placeholder="column.placeholder || column.label"
+                        variant="plain"
+                        hide-details
+                        density="compact"
+                      />
                       <VTextField
+                        v-else
                         v-model="row[column.key]"
                         :type="column.type"
-                        :placeholder="column.label"
+                        :placeholder="column.placeholder || column.label"
                         variant="plain"
                         hide-details
                         density="compact"

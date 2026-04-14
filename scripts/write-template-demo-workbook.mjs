@@ -3,6 +3,10 @@ import { fileURLToPath } from "node:url"
 import XLSXModule from "xlsx"
 
 import { templateDemoTables } from "../src/constants/template.js"
+import {
+  APP_OPTION_GROUPS_SHEET_NAME,
+  APP_OPTIONS_SHEET_NAME,
+} from "../src/utils/options/excel.js"
 
 const XLSX = XLSXModule.default ?? XLSXModule
 
@@ -231,6 +235,18 @@ function createTemplateSheet(table) {
     )
   }
 
+  if (table.ruleType === "enum_pair") {
+    return createTabularSheet(
+      ["match_key", "match_key_2", "value", "remark"],
+      (table.rows || []).map(row => ({
+        match_key: row.matchKey,
+        match_key_2: row.matchKey2,
+        value: row.value,
+        remark: row.remark,
+      })),
+    )
+  }
+
   return createTabularSheet(
     ["match_key", "x_min", "x_max", "value", "remark"],
     (table.rows || []).map(row => ({
@@ -241,6 +257,121 @@ function createTemplateSheet(table) {
       remark: row.remark,
     })),
   )
+}
+
+function createAppOptionsRows() {
+  return [
+    {
+      id: "shipping_included__yes",
+      group_key: "shipping_included",
+      label: "是",
+      value: "是",
+      sort: 1,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "shipping_included__no",
+      group_key: "shipping_included",
+      label: "否",
+      value: "否",
+      sort: 2,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "ad_type__classico",
+      group_key: "ad_type",
+      label: "Clássico",
+      value: "Clássico",
+      sort: 1,
+      enabled: 1,
+      remark: "Mercado Livre 广告类型。",
+    },
+    {
+      id: "ad_type__premium",
+      group_key: "ad_type",
+      label: "Premium",
+      value: "Premium",
+      sort: 4,
+      enabled: 1,
+      remark: "Mercado Livre 广告类型。",
+    },
+    {
+      id: "category__default",
+      group_key: "category",
+      label: "默认",
+      value: "默认",
+      sort: 1,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "category__fashion",
+      group_key: "category",
+      label: "服饰",
+      value: "服饰",
+      sort: 2,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "category__3c",
+      group_key: "category",
+      label: "3C",
+      value: "3C",
+      sort: 3,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "category__home",
+      group_key: "category",
+      label: "家居",
+      value: "家居",
+      sort: 4,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      id: "category__beauty",
+      group_key: "category",
+      label: "美妆",
+      value: "美妆",
+      sort: 5,
+      enabled: 1,
+      remark: "",
+    },
+  ]
+}
+
+function createAppOptionGroupsRows() {
+  return [
+    {
+      key: "ad_type",
+      title: "广告类型",
+      description: "创建页和佣金表里使用的广告类型选项。",
+      sort: 2,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      key: "category",
+      title: "类目",
+      description: "创建页和佣金表里使用的类目选项。",
+      sort: 3,
+      enabled: 1,
+      remark: "",
+    },
+    {
+      key: "shipping_included",
+      title: "是否包邮",
+      description: "创建页当前包邮状态使用的选项。",
+      sort: 1,
+      enabled: 1,
+      remark: "",
+    },
+  ]
 }
 
 const workbook = XLSX.readFile(workbookPath)
@@ -275,5 +406,21 @@ templateDemoTables.forEach((table) => {
 })
 
 upsertMlBrPreset(workbook)
+upsertSheet(
+  workbook,
+  APP_OPTION_GROUPS_SHEET_NAME,
+  createTabularSheet(
+    ["key", "title", "description", "sort", "enabled", "remark"],
+    createAppOptionGroupsRows(),
+  ),
+)
+upsertSheet(
+  workbook,
+  APP_OPTIONS_SHEET_NAME,
+  createTabularSheet(
+    ["id", "group_key", "label", "value", "sort", "enabled", "remark"],
+    createAppOptionsRows(),
+  ),
+)
 
 XLSX.writeFile(workbook, workbookPath)

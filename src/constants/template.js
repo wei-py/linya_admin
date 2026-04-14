@@ -43,6 +43,11 @@ export const templateRuleTypeOptions = [
     value: "enum_range",
     subtitle: "先按枚举分组，再按区间命中结果。",
   },
+  {
+    title: "双枚举",
+    value: "enum_pair",
+    subtitle: "按两个离散值联合查结果。",
+  },
 ]
 
 export const templateRuleTypeMetaMap = {
@@ -101,6 +106,17 @@ export const templateRuleTypeMetaMap = {
       { key: "remark", label: "备注", type: "text" },
     ],
   },
+  enum_pair: {
+    title: "双枚举",
+    description: "适合类目 + 广告类型、国家 + 平台这类双离散值查表。",
+    lookupArgs: "{类目}, {广告类型}",
+    columns: [
+      { key: "matchKey", label: "参数 1", type: "text" },
+      { key: "matchKey2", label: "参数 2", type: "text" },
+      { key: "value", label: "结果值", type: "number" },
+      { key: "remark", label: "备注", type: "text" },
+    ],
+  },
 }
 
 export function createTemplateRow(ruleType = "fixed") {
@@ -116,6 +132,10 @@ export function createTemplateRow(ruleType = "fixed") {
 
   if (ruleType === "enum") {
     return { id, matchKey: "", value: "", remark: "" }
+  }
+
+  if (ruleType === "enum_pair") {
+    return { id, matchKey: "", matchKey2: "", value: "", remark: "" }
   }
 
   return { id, matchKey: "", xMin: "", xMax: "", value: "", remark: "" }
@@ -677,11 +697,26 @@ export const templateDemoTables = [
     name: "巴西美客多佣金表",
     country: "巴西",
     platform: "美客多",
-    ruleType: "enum_range",
+    ruleType: "enum_pair",
     valueUnit: "%",
     sourceUrl: "https://www.mercadolivre.com.br/ajuda/tarifas-e-faturamento_1044",
     remark:
       "来源页当前只明确给出费率范围：Clássico 为 10%~14%，Premium 为 15%~19%。类目细表未直接给出，这里先不写死猜测值。",
-    rows: [],
+    rows: [
+      {
+        id: "ml_br_commission_1",
+        matchKey: "",
+        matchKey2: "Clássico",
+        value: "",
+        remark: "填写该类目在 Mercado Livre 后台查询到的精确费率。",
+      },
+      {
+        id: "ml_br_commission_2",
+        matchKey: "",
+        matchKey2: "Premium",
+        value: "",
+        remark: "填写该类目在 Mercado Livre 后台查询到的精确费率。",
+      },
+    ],
   },
 ]

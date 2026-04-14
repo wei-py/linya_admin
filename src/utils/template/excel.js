@@ -37,6 +37,7 @@ const SUPPORTED_RULE_TYPES = new Set([
   "range_2d",
   "enum",
   "enum_range",
+  "enum_pair",
 ])
 
 function normalizeValue(value) {
@@ -137,6 +138,22 @@ function normalizeTemplateRows(ruleType, rows = [], tableId = "") {
       }))
       .filter(row =>
         !isEmptyRuleRow(row, ["matchKey", "xMin", "xMax", "value", "remark"]),
+      )
+
+    return nextRows.length ? nextRows : [createTemplateRow(ruleType)]
+  }
+
+  if (ruleType === "enum_pair") {
+    const nextRows = rows
+      .map((row, index) => ({
+        id: row?.id || createTableRowId(tableId, index),
+        matchKey: normalizeValue(row?.matchKey ?? row?.match_key),
+        matchKey2: normalizeValue(row?.matchKey2 ?? row?.match_key_2),
+        value: normalizeValue(row?.value),
+        remark: normalizeValue(row?.remark),
+      }))
+      .filter(row =>
+        !isEmptyRuleRow(row, ["matchKey", "matchKey2", "value", "remark"]),
       )
 
     return nextRows.length ? nextRows : [createTemplateRow(ruleType)]
@@ -409,6 +426,18 @@ function createRuleSheet(table) {
         remark: row.remark,
       })),
       { header: ["match_key", "value", "remark"] },
+    )
+  }
+
+  if (table.ruleType === "enum_pair") {
+    return XLSX.utils.json_to_sheet(
+      table.rows.map(row => ({
+        match_key: row.matchKey,
+        match_key_2: row.matchKey2,
+        value: row.value,
+        remark: row.remark,
+      })),
+      { header: ["match_key", "match_key_2", "value", "remark"] },
     )
   }
 

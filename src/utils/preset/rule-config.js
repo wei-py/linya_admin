@@ -38,6 +38,7 @@ const TABLE_ARG_COUNT_MAP = {
   range_2d: 2,
   enum: 1,
   enum_range: 2,
+  enum_pair: 2,
 }
 
 const TABLE_ARG_LABEL_MAP = {
@@ -46,6 +47,7 @@ const TABLE_ARG_LABEL_MAP = {
   range_2d: ["参数 1", "参数 2"],
   enum: ["参数 1"],
   enum_range: ["参数 1", "参数 2"],
+  enum_pair: ["参数 1", "参数 2"],
 }
 
 function normalizeValue(value) {

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 
 import CreateView from "@/views/CreateView.vue"
 import ListView from "@/views/ListView.vue"
+import OptionsView from "@/views/OptionsView.vue"
 import PresetDetailView from "@/views/preset/PresetDetailView.vue"
 import PresetEmptyView from "@/views/preset/PresetEmptyView.vue"
 import PresetView from "@/views/PresetView.vue"
@@ -29,6 +30,12 @@ export const router = createRouter({
           meta: { title: "预设" },
         },
       ],
+    },
+    {
+      path: "/options",
+      name: "options",
+      component: OptionsView,
+      meta: { title: "选项" },
     },
     {
       path: "/template",

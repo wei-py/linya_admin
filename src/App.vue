@@ -3,12 +3,14 @@ import { computed, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { useDisplay } from "vuetify"
 
+import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
 import { isTauriApp, pickExcelFilePath } from "@/utils/tauri/excel-file"
 
 const fileInputRef = ref(null)
 const drawerOpen = ref(false)
+const optionsStore = useOptionsStore()
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
 const route = useRoute()
@@ -46,6 +48,8 @@ async function handleBind() {
 
     if (isBound) {
       await templateStore.refreshFromBoundExcel()
+      await optionsStore.refreshFromBoundExcel()
+      optionsStore.ensureDefaultOptions()
     }
 
     return
@@ -64,6 +68,8 @@ async function handleFileChange(event) {
 
   if (isBound) {
     await templateStore.refreshFromBoundExcel()
+    await optionsStore.refreshFromBoundExcel()
+    optionsStore.ensureDefaultOptions()
   }
 
   event.target.value = ""
@@ -72,6 +78,8 @@ async function handleFileChange(event) {
 onMounted(async () => {
   await presetStore.refreshBoundExcelFile()
   await templateStore.refreshFromBoundExcel()
+  await optionsStore.refreshFromBoundExcel()
+  optionsStore.ensureDefaultOptions()
 })
 </script>
 
@@ -144,6 +152,28 @@ onMounted(async () => {
               <span class="flex items-center gap-3">
                 <VIcon icon="mdi-tune-variant" />
                 <span class="font-medium">预设</span>
+              </span>
+            </div>
+          </RouterLink>
+
+          <RouterLink to="/options" class="block">
+            <div
+              class="
+                flex min-h-12 items-center gap-3 border-l-[3px] px-5 text-sm
+                font-medium transition-colors
+              "
+              :class="
+                $route.path === '/options'
+                  ? 'border-[#0f62fe] bg-[#edf5ff] text-[#161616]'
+                  : `
+                    border-transparent text-[#525252]
+                    hover:bg-[#f8f8f8] hover:text-[#161616]
+                  `
+              "
+            >
+              <span class="flex items-center gap-3">
+                <VIcon icon="mdi-format-list-bulleted-square" />
+                <span class="font-medium">选项</span>
               </span>
             </div>
           </RouterLink>
