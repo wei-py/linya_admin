@@ -45,6 +45,12 @@ export const createCalculationInputFields = [
 
 export const createProductBaseFields = [
   {
+    key: "name",
+    label: "名称",
+    placeholder: "输入名称",
+    type: "text",
+  },
+  {
     key: "styleNo",
     label: "款号",
     placeholder: "输入款号",

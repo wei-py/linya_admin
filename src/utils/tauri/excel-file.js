@@ -19,6 +19,15 @@ export async function pickExcelFilePath() {
 }
 
 /**
+ * 打开 Excel 保存路径选择器。
+ *
+ * @returns {Promise<string>} 选中的保存路径。
+ */
+export async function saveExcelFilePath() {
+  return invoke("save_excel_file")
+}
+
+/**
  * 读取本地文件字节。
  *
  * @param {string} path 文件路径。

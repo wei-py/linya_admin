@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { useDisplay } from "vuetify"
 
+import { useListStore } from "@/stores/list"
 import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
@@ -11,6 +12,7 @@ import { isTauriApp, pickExcelFilePath } from "@/utils/tauri/excel-file"
 const fileInputRef = ref(null)
 const drawerOpen = ref(false)
 const optionsStore = useOptionsStore()
+const listStore = useListStore()
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
 const route = useRoute()
@@ -79,6 +81,7 @@ onMounted(async () => {
   await presetStore.refreshBoundExcelFile()
   await templateStore.refreshFromBoundExcel()
   await optionsStore.refreshFromBoundExcel()
+  await listStore.refreshBoundExcelFile()
   optionsStore.ensureDefaultOptions()
 })
 </script>

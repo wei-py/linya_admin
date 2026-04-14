@@ -147,6 +147,15 @@ fn pick_excel_file() -> Option<String> {
 }
 
 #[tauri::command]
+fn save_excel_file() -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter("Excel", &["xlsx"])
+        .set_file_name("商品列表.xlsx")
+        .save_file()
+        .map(|path| path.display().to_string())
+}
+
+#[tauri::command]
 fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|error| error.to_string())
 }
@@ -236,6 +245,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             pick_excel_file,
+            save_excel_file,
             read_binary_file,
             write_binary_file,
             save_image_asset,

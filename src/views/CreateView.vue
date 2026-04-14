@@ -9,9 +9,11 @@ import {
   createProductBaseFields,
 } from "@/constants/create"
 import { booleanValueOptions } from "@/constants/preset"
+import { useListStore } from "@/stores/list"
 import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
+import { buildListProductBundle } from "@/utils/list/record"
 import { isTauriApp } from "@/utils/tauri/excel-file"
 import { saveImageAsset } from "@/utils/tauri/image-asset"
 
@@ -20,6 +22,7 @@ const CREATE_VIEW_DRAFT_STORAGE_KEY = "create:view:draft"
 const presetStore = usePresetStore()
 const templateStore = useTemplateStore()
 const optionsStore = useOptionsStore()
+const listStore = useListStore()
 const {
   activePresetId,
   presetRecords,
@@ -46,6 +49,7 @@ const imagePreviewDialogOpen = ref(false)
 const imagePreviewTitle = ref("")
 const imagePreviewSrc = ref("")
 const imagePreviewScale = ref(1)
+const addToListStatusMessage = ref("")
 const previewViewportRef = ref(null)
 const previewImageRef = ref(null)
 const previewOpenedAt = ref(0)
@@ -65,6 +69,7 @@ const form = reactive({
   netProfit: "",
   sellerShipping: "",
   fixedSurcharge: "",
+  name: "",
   styleNo: "",
   cost: "",
   weight: "",
@@ -109,8 +114,8 @@ const presetSummaryFieldNames = [
   "贴单费用",
   "是否包邮",
 ]
-const productPrimaryFieldKeys = ["styleNo", "cost", "weight", "category"]
-const productSecondaryFieldKeys = ["adType"]
+const productPrimaryFieldKeys = ["name", "styleNo", "cost", "weight"]
+const productSecondaryFieldKeys = ["category", "adType"]
 const calculationTargetFieldKeys = [
   "listPrice",
   "discountPrice",
@@ -356,6 +361,7 @@ function resetProductFormFields() {
   form.netProfit = ""
   form.sellerShipping = ""
   form.fixedSurcharge = ""
+  form.name = ""
   form.styleNo = ""
   form.cost = ""
   form.weight = ""
@@ -421,6 +427,7 @@ function createDraftPayload() {
       profitRate: form.profitRate,
       netProfit: form.netProfit,
       fixedSurcharge: form.fixedSurcharge,
+      name: form.name,
       styleNo: form.styleNo,
       cost: form.cost,
       weight: form.weight,
@@ -489,6 +496,7 @@ function restoreCreateDraft() {
     form.profitRate = draftForm.profitRate || ""
     form.netProfit = draftForm.netProfit || ""
     form.fixedSurcharge = draftForm.fixedSurcharge || ""
+    form.name = draftForm.name || ""
     form.styleNo = draftForm.styleNo || ""
     form.cost = draftForm.cost || ""
     form.weight = draftForm.weight || ""
@@ -1153,6 +1161,16 @@ const calculationSnapshot = computed(() => {
   }
 })
 
+function addCurrentProductToList() {
+  const bundle = buildListProductBundle({
+    form,
+    calculationSnapshot: calculationSnapshot.value,
+  })
+
+  listStore.addProductBundle(bundle)
+  addToListStatusMessage.value = `已加入列表 · ${bundle.record.name}`
+}
+
 const calculationDriverText = computed(() =>
   calculationDriver.value === "discountPrice"
     ? "折后售价"
@@ -1429,6 +1447,13 @@ function setCalculationDriver(key) {
             </div>
             <div class="flex items-center gap-2">
               <VBtn
+                color="primary"
+                size="small"
+                @click="addCurrentProductToList"
+              >
+                添加到列表
+              </VBtn>
+              <VBtn
                 v-if="selectedPresetRecord"
                 variant="text"
                 size="small"
@@ -1440,6 +1465,15 @@ function setCalculationDriver(key) {
           </div>
 
           <div v-if="hasPresetRecords" class="grid gap-3 px-4 pb-3">
+            <div
+              v-if="addToListStatusMessage"
+              class="
+                border border-[#a6c8ff] bg-[#edf5ff] px-3 py-2 text-sm
+                text-[#0f62fe]
+              "
+            >
+              {{ addToListStatusMessage }}
+            </div>
             <div
               class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
             >
