@@ -4,11 +4,12 @@ import * as XLSX from "xlsx"
 import { isTauriApp, readBinaryFile } from "@/utils/tauri/excel-file"
 
 export const LIST_MAIN_SHEET_NAME = "商品列表"
+export const LIST_RECORDS_SHEET_NAME = "商品记录"
 export const LIST_IMAGES_SHEET_NAME = "图片关系"
 export const LIST_VARIANTS_SHEET_NAME = "变体关系"
 export const LIST_FIELDS_SHEET_NAME = "扩展字段"
 export const LIST_META_SHEET_NAME = "程序信息"
-export const LIST_WORKBOOK_VERSION = "1"
+export const LIST_WORKBOOK_VERSION = "2"
 
 const MAIN_COLUMNS = [
   "名称",
@@ -20,14 +21,17 @@ const MAIN_COLUMNS = [
   "类目",
   "广告类型",
   "是否包邮",
+  "当前基准",
   "成本",
   "重量(g)",
   "境内运费",
+  "总费用(R$)",
   "折后价格(R$)",
   "折前价格(R$)",
   "利润率",
   "净利润(R$)",
   "收入(R$)",
+  "预设是否包邮",
   "活动费",
   "交易费",
   "佣金费",
@@ -82,6 +86,45 @@ const META_COLUMNS = [
   "description",
 ]
 
+const RECORD_COLUMNS = [
+  "id",
+  "name",
+  "sku",
+  "global_sku",
+  "country",
+  "platform",
+  "category",
+  "ad_type",
+  "shipping_included",
+  "current_benchmark",
+  "current_benchmark_key",
+  "cost",
+  "weight",
+  "seller_shipping",
+  "total_fee",
+  "discount_price",
+  "list_price",
+  "profit_rate",
+  "net_profit",
+  "revenue",
+  "shipping_default",
+  "activity_fee",
+  "transaction_fee",
+  "commission_fee",
+  "withdraw_fee",
+  "exchange_loss_fee",
+  "tax_fee",
+  "label_fee",
+  "fixed_surcharge",
+  "notes",
+  "cover_image_id",
+  "variant_summary",
+  "preset_snapshot_json",
+  "calculation_snapshot_json",
+  "created_at",
+  "updated_at",
+]
+
 function toText(value) {
   return String(value ?? "").trim()
 }
@@ -103,6 +146,22 @@ function toNumberString(value) {
   )
 }
 
+function normalizePathToken(value) {
+  return toText(value).replace(/\\/g, "/").trim()
+}
+
+function getPathBasename(value) {
+  const normalized = normalizePathToken(value)
+
+  if (!normalized) {
+    return ""
+  }
+
+  const segments = normalized.split("/")
+
+  return toText(segments.at(-1))
+}
+
 function normalizeListRecord(item = {}, index = 0) {
   return {
     id: toText(item.id) || `product_${Date.now()}_${index + 1}`,
@@ -114,9 +173,18 @@ function normalizeListRecord(item = {}, index = 0) {
     category: toText(item.category || item["类目"]),
     adType: toText(item.adType || item["广告类型"]),
     shippingIncluded: toText(item.shippingIncluded || item["是否包邮"]),
+    currentBenchmark: toText(
+      item.currentBenchmark || item.current_benchmark || item["当前基准"],
+    ),
+    currentBenchmarkKey: toText(
+      item.currentBenchmarkKey || item.current_benchmark_key,
+    ),
     cost: toNumberString(item.cost || item["成本"]),
     weight: toNumberString(item.weight || item["重量(g)"]),
     sellerShipping: toNumberString(item.sellerShipping || item["境内运费"]),
+    totalFee: toNumberString(
+      item.totalFee || item.total_fee || item["总费用(R$)"],
+    ),
     discountPrice: toNumberString(
       item.discountPrice || item["折后价格(R$)"],
     ),
@@ -124,6 +192,9 @@ function normalizeListRecord(item = {}, index = 0) {
     profitRate: toNumberString(item.profitRate || item["利润率"]),
     netProfit: toNumberString(item.netProfit || item["净利润(R$)"]),
     revenue: toNumberString(item.revenue || item["收入(R$)"]),
+    shippingDefault: toText(
+      item.shippingDefault || item.shipping_default || item["预设是否包邮"],
+    ),
     activityFee: toNumberString(item.activityFee || item["活动费"]),
     transactionFee: toNumberString(item.transactionFee || item["交易费"]),
     commissionFee: toNumberString(item.commissionFee || item["佣金费"]),
@@ -228,14 +299,58 @@ export function normalizeListWorkbookData(payload = {}) {
 
 export function importListWorkbookFromBytes(bytes) {
   const workbook = XLSX.read(bytes, { type: "array" })
+  const recordRows = readSheetRows(workbook, LIST_RECORDS_SHEET_NAME)
+  const mainRows = readSheetRows(workbook, LIST_MAIN_SHEET_NAME)
+  const imageRows = readSheetRows(workbook, LIST_IMAGES_SHEET_NAME)
+  const images = imageRows.map(normalizeImageEntry)
+  const useRecordSheet = Boolean(recordRows.length)
+  const sourceRows = useRecordSheet ? recordRows : mainRows
+  const coverImages = images
+    .filter(item => item.isCover)
+    .sort((a, b) => a.sort - b.sort)
+
+  const records = sourceRows.map((item, index) => {
+    const record = normalizeListRecord(item, index)
+
+    if (useRecordSheet) {
+      return record
+    }
+
+    const rowImagePath = normalizePathToken(
+      item["图片路径"] || item.imagePath || item.image_path,
+    )
+    const rowImageName = getPathBasename(rowImagePath)
+
+    let matchedImage = images.find((image) => {
+      const relativePath = normalizePathToken(image.relativePath)
+      const filePath = normalizePathToken(image.filePath)
+      const fileName = getPathBasename(image.fileName || image.filePath)
+
+      return (
+        (rowImagePath && rowImagePath === relativePath)
+        || (rowImagePath && rowImagePath === filePath)
+        || (rowImageName && rowImageName === fileName)
+      )
+    })
+
+    if (!matchedImage && coverImages.length === sourceRows.length) {
+      matchedImage = coverImages[index] || null
+    }
+
+    if (matchedImage?.productId) {
+      record.id = matchedImage.productId
+
+      if (!record.coverImageId) {
+        record.coverImageId = matchedImage.id
+      }
+    }
+
+    return record
+  })
 
   return normalizeListWorkbookData({
-    records: readSheetRows(workbook, LIST_MAIN_SHEET_NAME).map(
-      normalizeListRecord,
-    ),
-    images: readSheetRows(workbook, LIST_IMAGES_SHEET_NAME).map(
-      normalizeImageEntry,
-    ),
+    records,
+    images,
     variants: readSheetRows(workbook, LIST_VARIANTS_SHEET_NAME).map(
       normalizeVariantEntry,
     ),
@@ -243,6 +358,47 @@ export function importListWorkbookFromBytes(bytes) {
       normalizeFieldEntry,
     ),
   })
+}
+
+function recordToInternalRow(record = {}) {
+  return {
+    id: record.id,
+    name: record.name,
+    sku: record.sku,
+    global_sku: record.globalSku,
+    country: record.country,
+    platform: record.platform,
+    category: record.category,
+    ad_type: record.adType,
+    shipping_included: record.shippingIncluded,
+    current_benchmark: record.currentBenchmark,
+    current_benchmark_key: record.currentBenchmarkKey,
+    cost: record.cost,
+    weight: record.weight,
+    seller_shipping: record.sellerShipping,
+    total_fee: record.totalFee,
+    discount_price: record.discountPrice,
+    list_price: record.listPrice,
+    profit_rate: record.profitRate,
+    net_profit: record.netProfit,
+    revenue: record.revenue,
+    shipping_default: record.shippingDefault,
+    activity_fee: record.activityFee,
+    transaction_fee: record.transactionFee,
+    commission_fee: record.commissionFee,
+    withdraw_fee: record.withdrawFee,
+    exchange_loss_fee: record.exchangeLossFee,
+    tax_fee: record.taxFee,
+    label_fee: record.labelFee,
+    fixed_surcharge: record.fixedSurcharge,
+    notes: record.notes,
+    cover_image_id: record.coverImageId,
+    variant_summary: record.variantSummary,
+    preset_snapshot_json: record.presetSnapshotJson,
+    calculation_snapshot_json: record.calculationSnapshotJson,
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  }
 }
 
 function recordToSheetRow(record = {}) {
@@ -256,14 +412,17 @@ function recordToSheetRow(record = {}) {
     "类目": record.category,
     "广告类型": record.adType,
     "是否包邮": record.shippingIncluded,
+    "当前基准": record.currentBenchmark,
     "成本": record.cost,
     "重量(g)": record.weight,
     "境内运费": record.sellerShipping,
+    "总费用(R$)": record.totalFee,
     "折后价格(R$)": record.discountPrice,
     "折前价格(R$)": record.listPrice,
     "利润率": record.profitRate,
     "净利润(R$)": record.netProfit,
     "收入(R$)": record.revenue,
+    "预设是否包邮": record.shippingDefault,
     "活动费": record.activityFee,
     "交易费": record.transactionFee,
     "佣金费": record.commissionFee,
@@ -375,6 +534,32 @@ async function loadImageBuffer(image = {}) {
   return null
 }
 
+function bytesToBase64(bytes) {
+  let binary = ""
+  const chunkSize = 0x8000
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize)
+
+    binary += String.fromCharCode(...chunk)
+  }
+
+  return btoa(binary)
+}
+
+async function loadImageBase64(image = {}) {
+  const bytes = await loadImageBuffer(image)
+
+  if (!bytes?.length) {
+    return ""
+  }
+
+  const extension = inferImageExtension(image)
+  const mimeType = extension === "jpeg" ? "image/jpeg" : `image/${extension}`
+
+  return `data:${mimeType};base64,${bytesToBase64(bytes)}`
+}
+
 function applySheetBaseStyle(worksheet) {
   const headerRow = worksheet.getRow(1)
 
@@ -412,14 +597,17 @@ function configureMainSheetColumns(worksheet) {
     { header: "类目", key: "类目", width: 12 },
     { header: "广告类型", key: "广告类型", width: 12 },
     { header: "是否包邮", key: "是否包邮", width: 12 },
+    { header: "当前基准", key: "当前基准", width: 12 },
     { header: "成本", key: "成本", width: 12 },
     { header: "重量(g)", key: "重量(g)", width: 12 },
     { header: "境内运费", key: "境内运费", width: 12 },
+    { header: "总费用(R$)", key: "总费用(R$)", width: 14 },
     { header: "折后价格(R$)", key: "折后价格(R$)", width: 14 },
     { header: "折前价格(R$)", key: "折前价格(R$)", width: 14 },
     { header: "利润率", key: "利润率", width: 12 },
     { header: "净利润(R$)", key: "净利润(R$)", width: 14 },
     { header: "收入(R$)", key: "收入(R$)", width: 12 },
+    { header: "预设是否包邮", key: "预设是否包邮", width: 14 },
     { header: "活动费", key: "活动费", width: 12 },
     { header: "交易费", key: "交易费", width: 12 },
     { header: "佣金费", key: "佣金费", width: 12 },
@@ -446,6 +634,7 @@ export async function exportListWorkbookToBytes(payload = {}) {
   const workbook = new ExcelJS.Workbook()
   const data = normalizeListWorkbookData(payload)
   const mainSheet = workbook.addWorksheet(LIST_MAIN_SHEET_NAME)
+  const recordsSheet = workbook.addWorksheet(LIST_RECORDS_SHEET_NAME)
   const imagesSheet = workbook.addWorksheet(LIST_IMAGES_SHEET_NAME)
   const variantsSheet = workbook.addWorksheet(LIST_VARIANTS_SHEET_NAME)
   const fieldsSheet = workbook.addWorksheet(LIST_FIELDS_SHEET_NAME)
@@ -468,14 +657,14 @@ export async function exportListWorkbookToBytes(payload = {}) {
       continue
     }
 
-    const buffer = await loadImageBuffer(image)
+    const base64 = await loadImageBase64(image)
 
-    if (!buffer) {
+    if (!base64) {
       continue
     }
 
     const imageId = workbook.addImage({
-      buffer,
+      base64,
       extension: inferImageExtension(image),
     })
     const rowNumber = index + 2
@@ -484,12 +673,17 @@ export async function exportListWorkbookToBytes(payload = {}) {
     image.excelImageCell = cell.address
     cell.value = ""
     mainSheet.addImage(imageId, {
-      tl: { col: coverColumnIndex - 1 + 0.04, row: rowNumber - 1 + 0.04 },
-      br: { col: coverColumnIndex - 1 + 0.96, row: rowNumber - 1 + 0.96 },
+      tl: { col: coverColumnIndex - 1 + 0.08, row: rowNumber - 1 + 0.08 },
+      ext: { width: 84, height: 84 },
       editAs: "oneCell",
     })
   }
 
+  appendJsonRows(
+    recordsSheet,
+    data.records.map(recordToInternalRow),
+    RECORD_COLUMNS,
+  )
   appendJsonRows(
     imagesSheet,
     data.images.map(imageToSheetRow),

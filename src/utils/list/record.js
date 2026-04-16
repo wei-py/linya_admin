@@ -71,6 +71,8 @@ export function buildListProductBundle(payload = {}) {
   const now = new Date().toISOString()
   const form = cloneJson(payload.form || {})
   const calculationSnapshot = cloneJson(payload.calculationSnapshot || {})
+  const calculationDriver = toText(payload.calculationDriver)
+  const calculationDriverText = toText(payload.calculationDriverText)
   const extraFields = Array.isArray(form.extraProductFields)
     ? form.extraProductFields
     : []
@@ -139,11 +141,15 @@ export function buildListProductBundle(payload = {}) {
       cost: formatNumber(form.cost),
       weight: formatNumber(form.weight),
       sellerShipping: formatNumber(calculationSnapshot.sellerShipping),
+      totalFee: formatNumber(calculationSnapshot.totalFee),
       discountPrice: formatNumber(calculationSnapshot.discountPrice),
       listPrice: formatNumber(calculationSnapshot.listPrice),
       profitRate: formatNumber(calculationSnapshot.profitRate),
       netProfit: formatNumber(calculationSnapshot.netProfit),
       revenue: formatNumber(calculationSnapshot.revenue),
+      currentBenchmark: calculationDriverText || calculationDriver,
+      currentBenchmarkKey: calculationDriver,
+      shippingDefault: toText(calculationSnapshot.shippingDefault),
       activityFee: formatNumber(calculationSnapshot.activityFee),
       transactionFee: formatNumber(calculationSnapshot.transactionFee),
       commissionFee: formatNumber(calculationSnapshot.commissionFee),

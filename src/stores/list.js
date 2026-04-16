@@ -8,8 +8,8 @@ import {
 import {
   isTauriApp,
   readBinaryFile,
-  writeBinaryFile,
 } from "@/utils/tauri/excel-file"
+import { exportListWorkbook } from "@/utils/tauri/list-workbook"
 
 const LIST_RECORDS_STORAGE_KEY = "list:records"
 const LIST_IMAGES_STORAGE_KEY = "list:images"
@@ -256,9 +256,12 @@ export const useListStore = defineStore("list", {
       try {
         this.syncStatus = "saving"
         this.syncErrorMessage = ""
-        const bytes = await this.exportWorkbookBytes()
-
-        await writeBinaryFile(targetPath, bytes)
+        await exportListWorkbook(targetPath, {
+          records: this.records,
+          images: this.images,
+          variants: this.variants,
+          fields: this.fields,
+        })
 
         this.excelFilePath = targetPath
         this.excelFileName = targetPath.split(/[/\\]/).pop() || targetPath

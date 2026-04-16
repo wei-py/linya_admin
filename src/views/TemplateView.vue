@@ -47,6 +47,11 @@ const isEnumPairTable = computed(
 const isCommissionTable = computed(
   () => selectedTable.value?.id === "ml_br_commission",
 )
+const commissionAdTypeOptions = computed(() =>
+  adTypeOptions.value
+    .map(item => String(item || "").trim())
+    .filter(Boolean),
+)
 const templateRuleContentMetaText = computed(() => {
   if (!selectedTable.value) {
     return "0 项"
@@ -146,7 +151,7 @@ function getRuleTableColumns(table, ruleMeta) {
       }
 
       if (column.key === "matchKey2") {
-        return { ...column, label: "广告类型", placeholder: "例如 Clássico / Premium" }
+        return { ...column, label: "广告类型", placeholder: "选择已配置广告类型" }
       }
 
       if (column.key === "value") {
@@ -500,20 +505,14 @@ watch(
               <div class="flex flex-wrap items-center gap-2">
                 <template v-if="isCommissionTable">
                   <VBtn
+                    v-for="adType in commissionAdTypeOptions"
+                    :key="adType"
                     variant="tonal"
                     size="small"
                     density="compact"
-                    @click="handleAddEnumPairPresetRow('Clássico')"
+                    @click="handleAddEnumPairPresetRow(adType)"
                   >
-                    添加 Clássico
-                  </VBtn>
-                  <VBtn
-                    variant="tonal"
-                    size="small"
-                    density="compact"
-                    @click="handleAddEnumPairPresetRow('Premium')"
-                  >
-                    添加 Premium
+                    添加 {{ adType }}
                   </VBtn>
                 </template>
                 <VBtn
@@ -747,7 +746,7 @@ watch(
                       :key="column.key"
                       class="border-r px-3"
                     >
-                      <VAutocomplete
+                      <VSelect
                         v-if="
                           isCommissionTable
                             && column.key === 'matchKey'

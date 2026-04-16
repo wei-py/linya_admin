@@ -49,6 +49,7 @@ const imagePreviewDialogOpen = ref(false)
 const imagePreviewTitle = ref("")
 const imagePreviewSrc = ref("")
 const imagePreviewScale = ref(1)
+const calculationProcessDialogOpen = ref(false)
 const addToListStatusMessage = ref("")
 const previewViewportRef = ref(null)
 const previewImageRef = ref(null)
@@ -106,16 +107,22 @@ const selectedPresetRecord = computed(() =>
 )
 
 const hasPresetRecords = computed(() => presetRecords.value.length > 0)
-const presetSummaryFieldNames = [
-  "折扣",
-  "活动费率",
-  "交易费率",
-  "税率",
-  "贴单费用",
-  "是否包邮",
+const presetSummaryFieldConfigs = [
+  { name: "折扣", control: "number" },
+  { name: "活动费率", control: "number" },
+  { name: "交易费率", control: "number" },
+  { name: "税率", control: "number" },
+  { name: "贴单费用", control: "number" },
+  {
+    name: "是否包邮",
+    control: "select",
+    items: booleanValueOptions,
+    itemTitle: "title",
+    itemValue: "value",
+  },
 ]
 const productPrimaryFieldKeys = ["name", "styleNo", "cost", "weight"]
-const productSecondaryFieldKeys = ["category", "adType"]
+const productSecondaryFieldKeys = ["category", "adType", "shippingIncluded"]
 const calculationTargetFieldKeys = [
   "listPrice",
   "discountPrice",
@@ -140,8 +147,7 @@ const secondaryProductFields = computed(() =>
 const visibleProductFieldCount = computed(
   () =>
     primaryProductFields.value.length
-    + secondaryProductFields.value.length
-    + 3,
+    + secondaryProductFields.value.length,
 )
 
 const calculationDriverOptions = computed(() =>
@@ -171,9 +177,11 @@ const calculationCostFields = computed(() =>
 )
 
 const presetSummaryItems = computed(() =>
-  presetSummaryFieldNames
-    .map((name) => {
-      const item = form.presetItems.find(entry => entry.name === name)
+  presetSummaryFieldConfigs
+    .map((fieldConfig) => {
+      const item = form.presetItems.find(
+        entry => entry.name === fieldConfig.name,
+      )
 
       if (!item) {
         return null
@@ -187,7 +195,11 @@ const presetSummaryItems = computed(() =>
       return {
         id: item.id,
         item,
-        label: item.name,
+        label: fieldConfig.label || item.name,
+        control: fieldConfig.control || "display",
+        controlItems: fieldConfig.items || [],
+        itemTitle: fieldConfig.itemTitle,
+        itemValue: fieldConfig.itemValue,
         value: item.unit ? `${value} ${item.unit}` : value,
       }
     })
@@ -208,6 +220,28 @@ const hasExcelEmbeddedImages = computed(
   () => excelEmbeddedImages.value.length > 0,
 )
 
+const presetDrivenFields = [
+  {
+    presetName: "是否包邮",
+    formKey: "shippingIncluded",
+    normalize: (value) => {
+      const nextValue = String(value || "").trim()
+
+      return ["是", "否"].includes(nextValue) ? nextValue : ""
+    },
+  },
+  {
+    presetName: "类目",
+    formKey: "category",
+    normalize: value => String(value || "").trim(),
+  },
+  {
+    presetName: "广告类型",
+    formKey: "adType",
+    normalize: value => String(value || "").trim(),
+  },
+]
+
 function createExtraProductField() {
   const id = `product_extra_${Date.now()}_${extraProductFieldSeed.value}`
 
@@ -218,6 +252,22 @@ function createExtraProductField() {
     label: "",
     value: "",
   }
+}
+
+function getProductFieldItems(field) {
+  if (field.optionSource === "category") {
+    return categoryOptions.value
+  }
+
+  if (field.optionSource === "adType") {
+    return adTypeOptions.value
+  }
+
+  if (field.optionSource === "shippingIncluded") {
+    return shippingIncludedOptions.value
+  }
+
+  return []
 }
 
 function createImageLink(value = "") {
@@ -287,7 +337,9 @@ function resetPresetSnapshot() {
   form.country = ""
   form.platform = ""
   form.presetItems = []
-  form.shippingIncluded = ""
+  presetDrivenFields.forEach((field) => {
+    form[field.formKey] = ""
+  })
 }
 
 function applyPresetRecord(record) {
@@ -299,13 +351,30 @@ function applyPresetRecord(record) {
   form.country = record.country
   form.platform = record.platform
   form.presetItems = (record.items || []).map(createPresetSnapshotItem)
-  form.shippingIncluded = findPresetDefaultShippingValue(form.presetItems)
+  applyPresetFieldDefaults(form.presetItems)
 }
 
-function findPresetDefaultShippingValue(items = form.presetItems) {
-  const value = items.find(item => item.name === "是否包邮")?.value || ""
+function findPresetDrivenFieldValue(field, items = form.presetItems) {
+  const rawValue = items.find(item => item.name === field.presetName)?.value
 
-  return ["是", "否"].includes(value) ? value : ""
+  return field.normalize(rawValue)
+}
+
+function findPresetDrivenFieldValueByFormKey(
+  formKey,
+  items = form.presetItems,
+) {
+  const targetField = presetDrivenFields.find(
+    field => field.formKey === formKey,
+  )
+
+  return targetField ? findPresetDrivenFieldValue(targetField, items) : ""
+}
+
+function applyPresetFieldDefaults(items = form.presetItems) {
+  presetDrivenFields.forEach((field) => {
+    form[field.formKey] = findPresetDrivenFieldValue(field, items)
+  })
 }
 
 function ensureSelectedPreset() {
@@ -399,8 +468,12 @@ function updatePresetSnapshotItem(item, key, value) {
 function updatePresetSummaryValue(item, value) {
   updatePresetSnapshotItem(item, "value", value)
 
-  if (item.name === "是否包邮") {
-    form.shippingIncluded = value
+  const targetField = presetDrivenFields.find(
+    field => field.presetName === item.name,
+  )
+
+  if (targetField) {
+    form[targetField.formKey] = targetField.normalize(value)
   }
 }
 
@@ -993,8 +1066,16 @@ function findPresetMoneyUnit() {
   )?.unit || ""
 }
 
+function formatProcessValue(value, suffix = "") {
+  return `${formatEditableNumber(value)}${suffix}`
+}
+
 function getCurrentShippingIncludedValue() {
-  return form.shippingIncluded || findPresetDefaultShippingValue() || ""
+  return (
+    form.shippingIncluded
+    || findPresetDrivenFieldValueByFormKey("shippingIncluded")
+    || ""
+  )
 }
 
 function parseRangeUpperBound(value) {
@@ -1032,6 +1113,71 @@ function lookupRange2DTableValue(tableId, xValue, yValue) {
 
   return toNumber(targetRow?.values?.[targetColumn?.id])
 }
+
+function findMatchedRangeLabel(items = [], value = 0) {
+  if (!Array.isArray(items) || !items.length) {
+    return ""
+  }
+
+  return (
+    items.find(item => value <= parseRangeUpperBound(item.label))?.label
+    || items[items.length - 1]?.label
+    || ""
+  )
+}
+
+const shippingLookupMeta = computed(() => {
+  const shippingRuleItem = findPresetSnapshotItem("卖家支付运费")
+  const shippingIncluded = getCurrentShippingIncludedValue()
+  const discountRate = findPresetSnapshotNumber("折扣")
+  const discountFactor = 1 - discountRate / 100
+  const lookupDiscountPrice
+    = calculationDriver.value === "discountPrice"
+      ? toNumber(form.discountPrice)
+      : calculationDriver.value === "revenue"
+        ? toNumber(form.revenue)
+        : calculationDriver.value === "listPrice"
+          ? toNumber(form.listPrice) * discountFactor
+          : toNumber(form.discountPrice)
+  const weight = toNumber(form.weight)
+  const table = templateTables.value.find(
+    item => item.id === shippingRuleItem?.rule_table_id,
+  )
+
+  if (shippingIncluded === "是") {
+    return {
+      mode: "free_shipping",
+      lookupDiscountPrice,
+      weight,
+      xLabel: "",
+      yLabel: "",
+      tableName: "",
+    }
+  }
+
+  if (!shippingRuleItem?.rule_table_id || !table) {
+    return {
+      mode: "missing_rule",
+      lookupDiscountPrice,
+      weight,
+      xLabel: "",
+      yLabel: "",
+      tableName: "",
+    }
+  }
+
+  const columns = Array.isArray(table.columns) ? table.columns : []
+  const rows = Array.isArray(table.rows) ? table.rows : []
+
+  return {
+    mode: "table_lookup",
+    lookupDiscountPrice,
+    weight,
+    xLabel: findMatchedRangeLabel(columns, lookupDiscountPrice),
+    yLabel: findMatchedRangeLabel(rows, weight),
+    tableName: table.name || shippingRuleItem.name || "卖家支付运费",
+  }
+})
 
 const resolvedSellerShipping = computed(() => {
   const shippingRuleItem = findPresetSnapshotItem("卖家支付运费")
@@ -1156,23 +1302,14 @@ const calculationSnapshot = computed(() => {
     revenue,
     netProfit,
     profitRate,
-    shippingDefault: findPresetDefaultShippingValue() || "未设置",
+    shippingDefault:
+      findPresetDrivenFieldValueByFormKey("shippingIncluded") || "未设置",
     shippingIncluded: getCurrentShippingIncludedValue() || "未设置",
   }
 })
 
-function addCurrentProductToList() {
-  const bundle = buildListProductBundle({
-    form,
-    calculationSnapshot: calculationSnapshot.value,
-  })
-
-  listStore.addProductBundle(bundle)
-  addToListStatusMessage.value = `已加入列表 · ${bundle.record.name}`
-}
-
-const calculationDriverText = computed(() =>
-  calculationDriver.value === "discountPrice"
+function getCalculationDriverLabel() {
+  return calculationDriver.value === "discountPrice"
     ? "折后售价"
     : calculationDriver.value === "revenue"
       ? "收入"
@@ -1180,8 +1317,22 @@ const calculationDriverText = computed(() =>
         ? "利润率"
         : calculationDriver.value === "netProfit"
           ? "净利润"
-          : "折前价格",
-)
+          : "折前价格"
+}
+
+function addCurrentProductToList() {
+  const bundle = buildListProductBundle({
+    form,
+    calculationSnapshot: calculationSnapshot.value,
+    calculationDriver: calculationDriver.value,
+    calculationDriverText: getCalculationDriverLabel(),
+  })
+
+  listStore.addProductBundle(bundle)
+  addToListStatusMessage.value = `已加入列表 · ${bundle.record.name}`
+}
+
+const calculationDriverText = computed(() => getCalculationDriverLabel())
 
 const moneyUnitSuffix = computed(() =>
   findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
@@ -1317,6 +1468,243 @@ const feeSummaryItems = computed(() => [
     value: formatNumber(toNumber(form.cost), moneyUnitSuffix.value),
   },
 ])
+
+const calculationProcessSections = computed(() => {
+  const snapshot = calculationSnapshot.value
+  const money = moneyUnitSuffix.value
+  const percent = " %"
+  const baseListPrice = toNumber(form.listPrice)
+  const baseDiscountPrice = toNumber(form.discountPrice)
+  const baseRevenue = toNumber(form.revenue)
+  const baseProfitRate = toNumber(form.profitRate)
+  const baseNetProfit = toNumber(form.netProfit)
+  const discountRate = snapshot.discountRate
+  const discountFactor = 1 - discountRate / 100
+  const variableRate
+    = snapshot.activityRate
+      + snapshot.transactionRate
+      + snapshot.withdrawRate
+      + snapshot.exchangeLossRate
+      + snapshot.taxRate
+  const fixedCostBase
+    = snapshot.labelFee
+      + snapshot.sellerShipping
+      + snapshot.fixedSurcharge
+      + toNumber(form.cost)
+
+  const targetStep
+    = calculationDriver.value === "discountPrice"
+      ? {
+          label: "反推折后价",
+          formula: "折后价 = 输入的折后售价",
+          detail: `${formatProcessValue(baseDiscountPrice, money)} = ${formatProcessValue(snapshot.discountPrice, money)}`,
+        }
+      : calculationDriver.value === "revenue"
+        ? {
+            label: "反推折后价",
+            formula: "折后价 = 输入的收入",
+            detail: `${formatProcessValue(baseRevenue, money)} = ${formatProcessValue(snapshot.discountPrice, money)}`,
+          }
+        : calculationDriver.value === "profitRate"
+          ? {
+              label: "反推折后价",
+              formula:
+                "折后价 = 固定成本底数 ÷ (1 - 综合费率 - 目标利润率)",
+              detail:
+                `${formatProcessValue(fixedCostBase, money)} ÷ `
+                + `(1 - ${formatProcessValue(variableRate, percent)} - `
+                + `${formatProcessValue(baseProfitRate, percent)}) = `
+                + `${formatProcessValue(snapshot.discountPrice, money)}`,
+            }
+          : calculationDriver.value === "netProfit"
+            ? {
+                label: "反推折后价",
+                formula: "折后价 = (目标净利润 + 固定成本底数) ÷ (1 - 综合费率)",
+                detail:
+                  `(${formatProcessValue(baseNetProfit, money)} + `
+                  + `${formatProcessValue(fixedCostBase, money)}) ÷ `
+                  + `(1 - ${formatProcessValue(variableRate, percent)}) = `
+                  + `${formatProcessValue(snapshot.discountPrice, money)}`,
+              }
+            : {
+                label: "折后价计算",
+                formula: "折后价 = 折前价 × 折扣系数",
+                detail:
+                  `${formatProcessValue(baseListPrice, money)} × `
+                  + `${formatProcessValue(discountFactor)} = `
+                  + `${formatProcessValue(snapshot.discountPrice, money)}`,
+              }
+
+  const shippingStep
+    = shippingLookupMeta.value.mode === "free_shipping"
+      ? {
+          label: "卖家运费",
+          formula: "若商品是否包邮 = 是，则卖家运费 = 0",
+          detail: `商品是否包邮为“是”，所以卖家运费 = ${formatProcessValue(0, money)}`,
+        }
+      : shippingLookupMeta.value.mode === "table_lookup"
+        ? {
+            label: "卖家运费查表",
+            formula: "按折后价区间 + 重量区间查询二维规则表",
+            detail:
+              `查表 ${shippingLookupMeta.value.tableName}：折后价 `
+              + `${formatProcessValue(shippingLookupMeta.value.lookupDiscountPrice, money)} `
+              + `命中 ${shippingLookupMeta.value.xLabel || "-"}，重量 `
+              + `${formatProcessValue(shippingLookupMeta.value.weight)} 命中 `
+              + `${shippingLookupMeta.value.yLabel || "-"}，结果 = `
+              + `${formatProcessValue(snapshot.sellerShipping, money)}`,
+          }
+        : {
+            label: "卖家运费",
+            formula: "未命中有效规则时，卖家运费按 0 处理",
+            detail: `当前没有可用的“卖家支付运费”规则，结果 = ${formatProcessValue(0, money)}`,
+          }
+
+  return [
+    {
+      title: "输入与基准",
+      items: [
+        {
+          label: "当前反推目标",
+          formula: "当前输入字段决定反推方向",
+          detail: `${getCalculationDriverLabel()} 作为当前基准`,
+        },
+        {
+          label: "折扣系数",
+          formula: "折扣系数 = 1 - 折扣 ÷ 100",
+          detail:
+            `1 - ${formatProcessValue(discountRate, percent)} = `
+            + `${formatProcessValue(discountFactor)}`,
+        },
+        shippingStep,
+        {
+          label: "固定成本底数",
+          formula: "固定成本底数 = 贴单费 + 卖家运费 + 固定附加 + 成本",
+          detail:
+            `${formatProcessValue(snapshot.labelFee, money)} + `
+            + `${formatProcessValue(snapshot.sellerShipping, money)} + `
+            + `${formatProcessValue(snapshot.fixedSurcharge, money)} + `
+            + `${formatProcessValue(toNumber(form.cost), money)} = `
+            + `${formatProcessValue(fixedCostBase, money)}`,
+        },
+        {
+          label: "综合费率",
+          formula: "综合费率 = 活动费率 + 交易费率 + 提现费率 + 汇损 + 税率",
+          detail:
+            `${formatProcessValue(snapshot.activityRate, percent)} + `
+            + `${formatProcessValue(snapshot.transactionRate, percent)} + `
+            + `${formatProcessValue(snapshot.withdrawRate, percent)} + `
+            + `${formatProcessValue(snapshot.exchangeLossRate, percent)} + `
+            + `${formatProcessValue(snapshot.taxRate, percent)} = `
+            + `${formatProcessValue(variableRate, percent)}`,
+        },
+        targetStep,
+        {
+          label: "折前价",
+          formula: "折前价 = 折后价 ÷ 折扣系数",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} ÷ `
+            + `${formatProcessValue(discountFactor)} = `
+            + `${formatProcessValue(snapshot.listPrice, money)}`,
+        },
+      ],
+    },
+    {
+      title: "费用拆解",
+      items: [
+        {
+          label: "活动费",
+          formula: "活动费 = 折后价 × 活动费率",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} × `
+            + `${formatProcessValue(snapshot.activityRate, percent)} = `
+            + `${formatProcessValue(snapshot.activityFee, money)}`,
+        },
+        {
+          label: "交易费",
+          formula: "交易费 = 折后价 × 交易费率",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} × `
+            + `${formatProcessValue(snapshot.transactionRate, percent)} = `
+            + `${formatProcessValue(snapshot.transactionFee, money)}`,
+        },
+        {
+          label: "提现费",
+          formula: "提现费 = 折后价 × 提现费率",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} × `
+            + `${formatProcessValue(snapshot.withdrawRate, percent)} = `
+            + `${formatProcessValue(snapshot.withdrawFee, money)}`,
+        },
+        {
+          label: "汇损金额",
+          formula: "汇损金额 = 折后价 × 汇损率",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} × `
+            + `${formatProcessValue(snapshot.exchangeLossRate, percent)} = `
+            + `${formatProcessValue(snapshot.exchangeLossFee, money)}`,
+        },
+        {
+          label: "税费",
+          formula: "税费 = 折后价 × 税率",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} × `
+            + `${formatProcessValue(snapshot.taxRate, percent)} = `
+            + `${formatProcessValue(snapshot.taxFee, money)}`,
+        },
+        {
+          label: "总费用",
+          formula:
+            "总费用 = 活动费 + 交易费 + 提现费 + 汇损金额 + 税费 + 贴单费 + 卖家运费 + 固定附加",
+          detail:
+            `${formatProcessValue(snapshot.activityFee, money)} + `
+            + `${formatProcessValue(snapshot.transactionFee, money)} + `
+            + `${formatProcessValue(snapshot.withdrawFee, money)} + `
+            + `${formatProcessValue(snapshot.exchangeLossFee, money)} + `
+            + `${formatProcessValue(snapshot.taxFee, money)} + `
+            + `${formatProcessValue(snapshot.labelFee, money)} + `
+            + `${formatProcessValue(snapshot.sellerShipping, money)} + `
+            + `${formatProcessValue(snapshot.fixedSurcharge, money)} = `
+            + `${formatProcessValue(snapshot.totalFee, money)}`,
+        },
+      ],
+    },
+    {
+      title: "结果输出",
+      items: [
+        {
+          label: "收入",
+          formula: "收入 = 折后价",
+          detail:
+            `${formatProcessValue(snapshot.discountPrice, money)} = `
+            + `${formatProcessValue(snapshot.revenue, money)}`,
+        },
+        {
+          label: "净利润",
+          formula: "净利润 = 收入 - 总费用 - 成本",
+          detail:
+            `${formatProcessValue(snapshot.revenue, money)} - `
+            + `${formatProcessValue(snapshot.totalFee, money)} - `
+            + `${formatProcessValue(toNumber(form.cost), money)} = `
+            + `${formatProcessValue(snapshot.netProfit, money)}`,
+        },
+        {
+          label: "利润率",
+          formula:
+            calculationDriver.value === "profitRate"
+              ? "利润率由当前目标直接指定"
+              : "利润率 = 净利润 ÷ 收入 × 100",
+          detail:
+            calculationDriver.value === "profitRate"
+              ? `${formatProcessValue(baseProfitRate, percent)}`
+              : `${formatProcessValue(snapshot.netProfit, money)} ÷ `
+                + `${formatProcessValue(snapshot.revenue, money)} × 100 = `
+                + `${formatProcessValue(snapshot.profitRate, percent)}`,
+        },
+      ],
+    },
+  ]
+})
 
 function getCalculationFieldValue(key) {
   if (key === "sellerShipping") {
@@ -1537,11 +1925,11 @@ function setCalculationDriver(key) {
                     {{ item.label }}
                   </div>
                   <VSelect
-                    v-if="item.item.type === 'boolean'"
+                    v-if="item.control === 'select'"
                     :model-value="item.item.value"
-                    :items="booleanValueOptions"
-                    item-title="title"
-                    item-value="value"
+                    :items="item.controlItems"
+                    :item-title="item.itemTitle"
+                    :item-value="item.itemValue"
                     class="mt-1"
                     variant="plain"
                     hide-details
@@ -1551,7 +1939,7 @@ function setCalculationDriver(key) {
                     "
                   />
                   <VTextField
-                    v-else-if="item.item.type === 'number'"
+                    v-else-if="item.control === 'number'"
                     :model-value="item.item.value"
                     class="mt-1"
                     variant="plain"
@@ -1617,10 +2005,10 @@ function setCalculationDriver(key) {
                 class="surface-field surface-field--compact"
               >
                 <div class="surface-field__label">{{ field.label }}</div>
-                <VAutocomplete
-                  v-if="field.key === 'category'"
+                <VSelect
+                  v-if="field.control === 'select'"
                   v-model="form[field.key]"
-                  :items="categoryOptions"
+                  :items="getProductFieldItems(field)"
                   class="surface-field__control"
                   :placeholder="field.placeholder"
                   variant="plain"
@@ -1650,26 +2038,25 @@ function setCalculationDriver(key) {
               >
                 <div class="surface-field__label">{{ field.label }}</div>
                 <div
-                  v-if="field.key === 'shippingIncluded'"
+                  v-if="field.helperText"
                   class="mb-1 text-[11px] text-[#6f6f6f]"
                 >
-                  默认来自预设里的“是否包邮”，这里表示当前商品实际状态。
+                  {{ field.helperText }}
                 </div>
                 <VSelect
-                  v-if="field.key === 'shippingIncluded'"
+                  v-if="field.control === 'select'"
                   v-model="form[field.key]"
-                  :items="shippingIncludedOptions"
-                  item-title="title"
-                  item-value="value"
-                  class="surface-field__control"
-                  variant="plain"
-                  hide-details
-                  density="compact"
-                />
-                <VSelect
-                  v-else-if="field.key === 'adType'"
-                  v-model="form[field.key]"
-                  :items="adTypeOptions"
+                  :items="getProductFieldItems(field)"
+                  :item-title="
+                    field.optionSource === 'shippingIncluded'
+                      ? 'title'
+                      : undefined
+                  "
+                  :item-value="
+                    field.optionSource === 'shippingIncluded'
+                      ? 'value'
+                      : undefined
+                  "
                   class="surface-field__control"
                   :placeholder="field.placeholder"
                   variant="plain"
@@ -2316,6 +2703,15 @@ function setCalculationDriver(key) {
                     </div>
                   </dl>
                 </div>
+                <div class="border-t border-[#e0e0e0] pt-3">
+                  <VBtn
+                    variant="tonal"
+                    size="small"
+                    @click="calculationProcessDialogOpen = true"
+                  >
+                    查看运算过程
+                  </VBtn>
+                </div>
               </div>
             </details>
           </div>
@@ -2392,11 +2788,67 @@ function setCalculationDriver(key) {
                 </div>
               </dl>
             </div>
+            <div class="border-t border-[#e0e0e0] pt-3">
+              <VBtn
+                variant="tonal"
+                size="small"
+                @click="calculationProcessDialogOpen = true"
+              >
+                查看运算过程
+              </VBtn>
+            </div>
           </div>
         </VCard>
       </div>
     </div>
   </div>
+
+  <VDialog v-model="calculationProcessDialogOpen" max-width="960">
+    <VCard
+      class="workspace-sheet overflow-hidden border border-[#c6c6c6] bg-white"
+    >
+      <div class="workspace-panel-header">
+        <div class="workspace-panel-title">运算过程</div>
+        <div class="workspace-panel-meta">
+          {{
+            calculationProcessSections.reduce(
+              (total, section) => total + section.items.length,
+              0,
+            )
+          }} 步
+        </div>
+      </div>
+
+      <div class="workspace-panel-body max-h-[78vh] overflow-y-auto space-y-3">
+        <div
+          v-for="section in calculationProcessSections"
+          :key="section.title"
+          class="border-t border-[#e0e0e0] pt-3 first:border-t-0 first:pt-0"
+        >
+          <div class="text-sm font-semibold text-[#161616]">
+            {{ section.title }}
+          </div>
+          <div class="mt-3 space-y-2">
+            <div
+              v-for="item in section.items"
+              :key="`${section.title}-${item.label}`"
+              class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2.5"
+            >
+              <div class="text-[11px] font-medium text-[#525252]">
+                {{ item.label }}
+              </div>
+              <div class="mt-1 text-[12px] text-[#161616]">
+                {{ item.formula }}
+              </div>
+              <div class="mt-1 text-[12px] leading-5 text-[#525252]">
+                {{ item.detail }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </VCard>
+  </VDialog>
 
   <VDialog v-model="imagePreviewDialogOpen" max-width="960">
     <VCard
