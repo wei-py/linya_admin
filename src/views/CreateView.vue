@@ -6,6 +6,8 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue"
 
 import {
   createCalculationInputFields,
+  createPresetFieldDefinitions,
+  createPresetSummaryFieldConfigs,
   createProductBaseFields,
 } from "@/constants/create"
 import { booleanValueOptions } from "@/constants/preset"
@@ -13,9 +15,17 @@ import { useListStore } from "@/stores/list"
 import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
+import {
+  findOptionBackedFieldByFormKey,
+  optionBackedFieldDefinitions,
+} from "@/utils/app-fields"
 import { buildListProductBundle } from "@/utils/list/record"
 import { isTauriApp } from "@/utils/tauri/excel-file"
 import { saveImageAsset } from "@/utils/tauri/image-asset"
+import {
+  describeTemplateLookupHit,
+  getTemplateLookupValue,
+} from "@/utils/template/lookup"
 
 const CREATE_VIEW_DRAFT_STORAGE_KEY = "create:view:draft"
 
@@ -32,9 +42,8 @@ const {
 } = storeToRefs(presetStore)
 const { templateTables } = storeToRefs(templateStore)
 const {
-  adTypeOptions,
-  categoryOptions,
-  shippingIncludedOptions,
+  getOptionLabelsByGroupKey,
+  getOptionSelectItemsByGroupKey,
 } = storeToRefs(optionsStore)
 
 const selectedPresetId = ref("")
@@ -107,20 +116,7 @@ const selectedPresetRecord = computed(() =>
 )
 
 const hasPresetRecords = computed(() => presetRecords.value.length > 0)
-const presetSummaryFieldConfigs = [
-  { name: "折扣", control: "number" },
-  { name: "活动费率", control: "number" },
-  { name: "交易费率", control: "number" },
-  { name: "税率", control: "number" },
-  { name: "贴单费用", control: "number" },
-  {
-    name: "是否包邮",
-    control: "select",
-    items: booleanValueOptions,
-    itemTitle: "title",
-    itemValue: "value",
-  },
-]
+const presetSummaryFieldConfigs = createPresetSummaryFieldConfigs
 const productPrimaryFieldKeys = ["name", "styleNo", "cost", "weight"]
 const productSecondaryFieldKeys = ["category", "adType", "shippingIncluded"]
 const calculationTargetFieldKeys = [
@@ -197,9 +193,12 @@ const presetSummaryItems = computed(() =>
         item,
         label: fieldConfig.label || item.name,
         control: fieldConfig.control || "display",
-        controlItems: fieldConfig.items || [],
-        itemTitle: fieldConfig.itemTitle,
-        itemValue: fieldConfig.itemValue,
+        controlItems:
+          fieldConfig.formKey === "shippingIncluded"
+            ? booleanValueOptions
+            : fieldConfig.items || [],
+        itemTitle: fieldConfig.itemTitle || "title",
+        itemValue: fieldConfig.itemValue || "value",
         value: item.unit ? `${value} ${item.unit}` : value,
       }
     })
@@ -220,27 +219,11 @@ const hasExcelEmbeddedImages = computed(
   () => excelEmbeddedImages.value.length > 0,
 )
 
-const presetDrivenFields = [
-  {
-    presetName: "是否包邮",
-    formKey: "shippingIncluded",
-    normalize: (value) => {
-      const nextValue = String(value || "").trim()
-
-      return ["是", "否"].includes(nextValue) ? nextValue : ""
-    },
-  },
-  {
-    presetName: "类目",
-    formKey: "category",
-    normalize: value => String(value || "").trim(),
-  },
-  {
-    presetName: "广告类型",
-    formKey: "adType",
-    normalize: value => String(value || "").trim(),
-  },
-]
+const presetDrivenFields = optionBackedFieldDefinitions.map(field => ({
+  presetName: field.fieldName,
+  formKey: field.formKey,
+  normalize: field.normalize,
+}))
 
 function createExtraProductField() {
   const id = `product_extra_${Date.now()}_${extraProductFieldSeed.value}`
@@ -255,19 +238,15 @@ function createExtraProductField() {
 }
 
 function getProductFieldItems(field) {
-  if (field.optionSource === "category") {
-    return categoryOptions.value
+  const optionField = findOptionBackedFieldByFormKey(field.key)
+
+  if (!optionField) {
+    return []
   }
 
-  if (field.optionSource === "adType") {
-    return adTypeOptions.value
-  }
-
-  if (field.optionSource === "shippingIncluded") {
-    return shippingIncludedOptions.value
-  }
-
-  return []
+  return optionField.formKey === "shippingIncluded"
+    ? getOptionSelectItemsByGroupKey.value(optionField.optionGroupKey)
+    : getOptionLabelsByGroupKey.value(optionField.optionGroupKey)
 }
 
 function createImageLink(value = "") {
@@ -1078,58 +1057,28 @@ function getCurrentShippingIncludedValue() {
   )
 }
 
-function parseRangeUpperBound(value) {
-  const normalized = String(value ?? "").trim()
-
-  if (!normalized || normalized === "最后区间及以上") {
-    return Number.POSITIVE_INFINITY
-  }
-
-  const nextValue = Number(normalized)
-
-  return Number.isFinite(nextValue) ? nextValue : Number.POSITIVE_INFINITY
+function findCreatePresetFieldName(key) {
+  return createPresetFieldDefinitions[key]?.name || ""
 }
 
-function lookupRange2DTableValue(tableId, xValue, yValue) {
+function lookupTemplateTableValue(tableId, args = []) {
   const table = templateTables.value.find(item => item.id === tableId)
 
-  if (!table || table.ruleType !== "range_2d") {
+  if (!table) {
     return 0
   }
 
-  const columns = Array.isArray(table.columns) ? table.columns : []
-  const rows = Array.isArray(table.rows) ? table.rows : []
-
-  if (!columns.length || !rows.length) {
-    return 0
-  }
-
-  const targetColumn
-    = columns.find(column => xValue <= parseRangeUpperBound(column.label))
-      || columns[columns.length - 1]
-  const targetRow
-    = rows.find(row => yValue <= parseRangeUpperBound(row.label))
-      || rows[rows.length - 1]
-
-  return toNumber(targetRow?.values?.[targetColumn?.id])
-}
-
-function findMatchedRangeLabel(items = [], value = 0) {
-  if (!Array.isArray(items) || !items.length) {
-    return ""
-  }
-
-  return (
-    items.find(item => value <= parseRangeUpperBound(item.label))?.label
-    || items[items.length - 1]?.label
-    || ""
-  )
+  return toNumber(getTemplateLookupValue(table, args))
 }
 
 const shippingLookupMeta = computed(() => {
-  const shippingRuleItem = findPresetSnapshotItem("卖家支付运费")
+  const shippingRuleItem = findPresetSnapshotItem(
+    findCreatePresetFieldName("shippingRule"),
+  )
   const shippingIncluded = getCurrentShippingIncludedValue()
-  const discountRate = findPresetSnapshotNumber("折扣")
+  const discountRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("discountRate"),
+  )
   const discountFactor = 1 - discountRate / 100
   const lookupDiscountPrice
     = calculationDriver.value === "discountPrice"
@@ -1149,8 +1098,7 @@ const shippingLookupMeta = computed(() => {
       mode: "free_shipping",
       lookupDiscountPrice,
       weight,
-      xLabel: "",
-      yLabel: "",
+      hitDetails: [],
       tableName: "",
     }
   }
@@ -1160,29 +1108,33 @@ const shippingLookupMeta = computed(() => {
       mode: "missing_rule",
       lookupDiscountPrice,
       weight,
-      xLabel: "",
-      yLabel: "",
+      hitDetails: [],
       tableName: "",
     }
   }
 
-  const columns = Array.isArray(table.columns) ? table.columns : []
-  const rows = Array.isArray(table.rows) ? table.rows : []
+  const lookupArgs = [lookupDiscountPrice, weight]
 
   return {
     mode: "table_lookup",
     lookupDiscountPrice,
     weight,
-    xLabel: findMatchedRangeLabel(columns, lookupDiscountPrice),
-    yLabel: findMatchedRangeLabel(rows, weight),
-    tableName: table.name || shippingRuleItem.name || "卖家支付运费",
+    hitDetails: describeTemplateLookupHit(table, lookupArgs),
+    tableName:
+      table.name
+      || shippingRuleItem.name
+      || findCreatePresetFieldName("shippingRule"),
   }
 })
 
 const resolvedSellerShipping = computed(() => {
-  const shippingRuleItem = findPresetSnapshotItem("卖家支付运费")
+  const shippingRuleItem = findPresetSnapshotItem(
+    findCreatePresetFieldName("shippingRule"),
+  )
   const shippingIncluded = getCurrentShippingIncludedValue()
-  const discountRate = findPresetSnapshotNumber("折扣")
+  const discountRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("discountRate"),
+  )
   const discountFactor = 1 - discountRate / 100
   const lookupDiscountPrice
     = calculationDriver.value === "discountPrice"
@@ -1201,11 +1153,10 @@ const resolvedSellerShipping = computed(() => {
     return 0
   }
 
-  return lookupRange2DTableValue(
-    shippingRuleItem.rule_table_id,
+  return lookupTemplateTableValue(shippingRuleItem.rule_table_id, [
     lookupDiscountPrice,
     toNumber(form.weight),
-  )
+  ])
 })
 
 const calculationSnapshot = computed(() => {
@@ -1217,13 +1168,25 @@ const calculationSnapshot = computed(() => {
   const sellerShipping = resolvedSellerShipping.value
   const fixedSurcharge = toNumber(form.fixedSurcharge)
   const cost = toNumber(form.cost)
-  const discountRate = findPresetSnapshotNumber("折扣")
-  const activityRate = findPresetSnapshotNumber("活动费率")
-  const transactionRate = findPresetSnapshotNumber("交易费率")
-  const withdrawRate = findPresetSnapshotNumber("提现费率")
-  const exchangeLossRate = findPresetSnapshotNumber("汇损")
-  const taxRate = findPresetSnapshotNumber("税率")
-  const labelFee = findPresetSnapshotNumber("贴单费用")
+  const discountRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("discountRate"),
+  )
+  const activityRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("activityRate"),
+  )
+  const transactionRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("transactionRate"),
+  )
+  const withdrawRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("withdrawRate"),
+  )
+  const exchangeLossRate = findPresetSnapshotNumber(
+    findCreatePresetFieldName("exchangeLossRate"),
+  )
+  const taxRate = findPresetSnapshotNumber(findCreatePresetFieldName("taxRate"))
+  const labelFee = findPresetSnapshotNumber(
+    findCreatePresetFieldName("labelFee"),
+  )
   const discountFactor = 1 - discountRate / 100
   const variableRate
     = (activityRate
@@ -1442,8 +1405,8 @@ const feeSummaryItems = computed(() => [
     label: "贴单费",
     value: formatNumber(
       calculationSnapshot.value.labelFee,
-      findPresetSnapshotUnit("贴单费用")
-        ? ` ${findPresetSnapshotUnit("贴单费用")}`
+      findPresetSnapshotUnit(findCreatePresetFieldName("labelFee"))
+        ? ` ${findPresetSnapshotUnit(findCreatePresetFieldName("labelFee"))}`
         : moneyUnitSuffix.value
           ? moneyUnitSuffix.value
           : "",
@@ -1545,14 +1508,15 @@ const calculationProcessSections = computed(() => {
       : shippingLookupMeta.value.mode === "table_lookup"
         ? {
             label: "卖家运费查表",
-            formula: "按折后价区间 + 重量区间查询二维规则表",
+            formula: "按规则表维度顺序匹配记录",
             detail:
-              `查表 ${shippingLookupMeta.value.tableName}：折后价 `
-              + `${formatProcessValue(shippingLookupMeta.value.lookupDiscountPrice, money)} `
-              + `命中 ${shippingLookupMeta.value.xLabel || "-"}，重量 `
-              + `${formatProcessValue(shippingLookupMeta.value.weight)} 命中 `
-              + `${shippingLookupMeta.value.yLabel || "-"}，结果 = `
-              + `${formatProcessValue(snapshot.sellerShipping, money)}`,
+              `查表 ${shippingLookupMeta.value.tableName}：${shippingLookupMeta.value.hitDetails
+                .map(
+                  item =>
+                    `${item.fieldName}=${formatProcessValue(item.inputValue)} `
+                    + `命中 ${item.matchedLabel || "-"}`,
+                )
+                .join("；")}，结果 = ${formatProcessValue(snapshot.sellerShipping, money)}`,
           }
         : {
             label: "卖家运费",

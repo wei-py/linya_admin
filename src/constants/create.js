@@ -1,3 +1,34 @@
+import { optionBackedFieldDefinitions } from "@/utils/app-fields"
+
+export const createPresetFieldDefinitions = {
+  discountRate: { name: "折扣", control: "number" },
+  activityRate: { name: "活动费率", control: "number" },
+  transactionRate: { name: "交易费率", control: "number" },
+  withdrawRate: { name: "提现费率", control: "number" },
+  exchangeLossRate: { name: "汇损", control: "number" },
+  taxRate: { name: "税率", control: "number" },
+  labelFee: { name: "贴单费用", control: "number" },
+  shippingRule: { name: "卖家支付运费", control: "rule" },
+}
+
+export const createPresetSummaryFieldConfigs = [
+  createPresetFieldDefinitions.discountRate,
+  createPresetFieldDefinitions.activityRate,
+  createPresetFieldDefinitions.transactionRate,
+  createPresetFieldDefinitions.taxRate,
+  createPresetFieldDefinitions.labelFee,
+  {
+    ...optionBackedFieldDefinitions.find(
+      field => field.formKey === "shippingIncluded",
+    ),
+    name:
+      optionBackedFieldDefinitions.find(
+        field => field.formKey === "shippingIncluded",
+      )?.fieldName || "是否包邮",
+    control: "select",
+  },
+]
+
 export const createCalculationInputFields = [
   {
     key: "listPrice",
@@ -85,7 +116,9 @@ export const createProductBaseFields = [
     placeholder: "选择类目",
     type: "text",
     control: "select",
-    optionSource: "category",
+    optionSource: optionBackedFieldDefinitions.find(
+      field => field.formKey === "category",
+    )?.optionSource || "category",
   },
   {
     key: "adType",
@@ -93,7 +126,9 @@ export const createProductBaseFields = [
     placeholder: "选择广告类型",
     type: "text",
     control: "select",
-    optionSource: "adType",
+    optionSource: optionBackedFieldDefinitions.find(
+      field => field.formKey === "adType",
+    )?.optionSource || "adType",
   },
   {
     key: "shippingIncluded",
@@ -101,7 +136,8 @@ export const createProductBaseFields = [
     placeholder: "选择是否包邮",
     type: "text",
     control: "select",
-    optionSource: "shippingIncluded",
-    helperText: "默认来自预设里的“是否包邮”，这里表示当前商品实际状态。",
+    optionSource: optionBackedFieldDefinitions.find(
+      field => field.formKey === "shippingIncluded",
+    )?.optionSource || "shippingIncluded",
   },
 ]

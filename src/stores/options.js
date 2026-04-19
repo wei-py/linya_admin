@@ -1,6 +1,7 @@
 import { defineStore } from "pinia"
 
 import { usePresetStore } from "@/stores/preset"
+import { optionBackedFieldDefinitions, resolveOptionGroupKey } from "@/utils/app-fields"
 import {
   exportWorkbookToBytes,
   readWorkbookFromBytes,
@@ -18,32 +19,23 @@ import {
   writeBinaryFile,
 } from "@/utils/tauri/excel-file"
 
-const DEFAULT_OPTION_GROUPS = [
-  {
-    key: "shipping_included",
-    title: "是否包邮",
-    description: "创建页当前包邮状态使用的选项。",
-    sort: 1,
+const DEFAULT_OPTION_GROUP_DESCRIPTION_MAP = {
+  shipping_included: "创建页当前包邮状态使用的选项。",
+  ad_type: "创建页和佣金表里使用的广告类型选项。",
+  category: "创建页和佣金表里使用的类目选项。",
+}
+
+const DEFAULT_OPTION_GROUPS = optionBackedFieldDefinitions.map(
+  (field, index) => ({
+    key: field.optionGroupKey,
+    title: field.fieldName,
+    description:
+      DEFAULT_OPTION_GROUP_DESCRIPTION_MAP[field.optionGroupKey] || "",
+    sort: index + 1,
     enabled: 1,
     remark: "",
-  },
-  {
-    key: "ad_type",
-    title: "广告类型",
-    description: "创建页和佣金表里使用的广告类型选项。",
-    sort: 2,
-    enabled: 1,
-    remark: "",
-  },
-  {
-    key: "category",
-    title: "类目",
-    description: "创建页和佣金表里使用的类目选项。",
-    sort: 3,
-    enabled: 1,
-    remark: "",
-  },
-]
+  }),
+)
 
 let optionsSyncTimer = null
 
@@ -152,26 +144,37 @@ export const useOptionsStore = defineStore("options", {
         .filter(item => item.groupKey === state.activeGroupKey)
         .sort((a, b) => a.sort - b.sort)
     },
-    adTypeOptions(state) {
-      return state.optionEntries
-        .filter(item => item.groupKey === "ad_type" && item.enabled)
-        .sort((a, b) => a.sort - b.sort)
-        .map(item => item.label)
+    getOptionLabelsByGroupKey(state) {
+      return (groupKey = "") =>
+        state.optionEntries
+          .filter(
+            item =>
+              item.groupKey === resolveOptionGroupKey(groupKey) && item.enabled,
+          )
+          .sort((a, b) => a.sort - b.sort)
+          .map(item => item.label)
     },
-    categoryOptions(state) {
-      return state.optionEntries
-        .filter(item => item.groupKey === "category" && item.enabled)
-        .sort((a, b) => a.sort - b.sort)
-        .map(item => item.label)
+    getOptionSelectItemsByGroupKey(state) {
+      return (groupKey = "") =>
+        state.optionEntries
+          .filter(
+            item =>
+              item.groupKey === resolveOptionGroupKey(groupKey) && item.enabled,
+          )
+          .sort((a, b) => a.sort - b.sort)
+          .map(item => ({
+            title: item.label,
+            value: item.value,
+          }))
     },
-    shippingIncludedOptions(state) {
-      return state.optionEntries
-        .filter(item => item.groupKey === "shipping_included" && item.enabled)
-        .sort((a, b) => a.sort - b.sort)
-        .map(item => ({
-          title: item.label,
-          value: item.value,
-        }))
+    adTypeOptions() {
+      return this.getOptionLabelsByGroupKey("ad_type")
+    },
+    categoryOptions() {
+      return this.getOptionLabelsByGroupKey("category")
+    },
+    shippingIncludedOptions() {
+      return this.getOptionSelectItemsByGroupKey("shipping_included")
     },
   },
 

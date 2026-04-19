@@ -32,24 +32,6 @@ export const presetRuleActionKindOptions = [
   { title: "查表", value: "table" },
 ]
 
-const TABLE_ARG_COUNT_MAP = {
-  fixed: 0,
-  range_1d: 1,
-  range_2d: 2,
-  enum: 1,
-  enum_range: 2,
-  enum_pair: 2,
-}
-
-const TABLE_ARG_LABEL_MAP = {
-  fixed: [],
-  range_1d: ["参数 1"],
-  range_2d: ["参数 1", "参数 2"],
-  enum: ["参数 1"],
-  enum_range: ["参数 1", "参数 2"],
-  enum_pair: ["参数 1", "参数 2"],
-}
-
 function normalizeValue(value) {
   return String(value ?? "").trim()
 }
@@ -105,7 +87,11 @@ export function getTableArgCount(table) {
     return 0
   }
 
-  return TABLE_ARG_COUNT_MAP[table.ruleType] || 0
+  if (Array.isArray(table.dimensions) && table.dimensions.length) {
+    return table.dimensions.length
+  }
+
+  return 0
 }
 
 export function getTableArgLabels(table) {
@@ -113,7 +99,14 @@ export function getTableArgLabels(table) {
     return []
   }
 
-  return TABLE_ARG_LABEL_MAP[table.ruleType] || []
+  if (Array.isArray(table.dimensions) && table.dimensions.length) {
+    return table.dimensions.map(
+      (dimension, index) =>
+        normalizeValue(dimension.fieldName) || `参数 ${index + 1}`,
+    )
+  }
+
+  return []
 }
 
 function normalizeArgs(args = [], count = 0) {

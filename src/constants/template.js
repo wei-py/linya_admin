@@ -2,6 +2,95 @@ function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
+export const templateDimensionKindOptions = [
+  { title: "枚举", value: "enum" },
+  { title: "区间", value: "range" },
+]
+
+export function createTemplateDimension(kind = "enum") {
+  return {
+    id: createId("dimension"),
+    fieldName: "",
+    kind: kind === "range" ? "range" : "enum",
+  }
+}
+
+export function createTemplateResultColumn() {
+  return {
+    id: createId("result"),
+    label: "结果值",
+    type: "number",
+  }
+}
+
+export function createTemplateRecord(dimensions = [], resultColumns = []) {
+  return {
+    id: createId("record"),
+    values: Object.fromEntries([
+      ...dimensions.flatMap(dimension =>
+        dimension.kind === "range"
+          ? [
+              [`${dimension.id}__min`, ""],
+              [`${dimension.id}__max`, ""],
+            ]
+          : [[dimension.id, ""]],
+      ),
+      ...resultColumns.map(column => [column.id, ""]),
+    ]),
+    remark: "",
+  }
+}
+
+export function inferTemplateRuleType(dimensions = []) {
+  const enumCount = dimensions.filter(item => item.kind === "enum").length
+  const rangeCount = dimensions.filter(item => item.kind === "range").length
+
+  if (!dimensions.length) {
+    return "fixed"
+  }
+
+  if (!enumCount && rangeCount === 1) {
+    return "range_1d"
+  }
+
+  if (!enumCount && rangeCount === 2) {
+    return "range_2d"
+  }
+
+  if (enumCount === 1 && !rangeCount) {
+    return "enum"
+  }
+
+  if (enumCount === 1 && rangeCount === 1) {
+    return "enum_range"
+  }
+
+  if (enumCount === 2 && !rangeCount) {
+    return "enum_pair"
+  }
+
+  return "generic"
+}
+
+export function getTemplateRuleTypeSummary(dimensions = []) {
+  const enumCount = dimensions.filter(item => item.kind === "enum").length
+  const rangeCount = dimensions.filter(item => item.kind === "range").length
+
+  if (!enumCount && !rangeCount) {
+    return "固定"
+  }
+
+  if (enumCount && rangeCount) {
+    return `${enumCount} 个枚举 + ${rangeCount} 个区间`
+  }
+
+  if (enumCount) {
+    return `${enumCount} 个枚举`
+  }
+
+  return `${rangeCount} 个区间`
+}
+
 export function createTemplateMatrixColumn() {
   return {
     id: createId("col"),
@@ -142,32 +231,7 @@ export function createTemplateRow(ruleType = "fixed") {
 }
 
 export function createTemplateTable(ruleType = "fixed") {
-  if (ruleType === "range_2d") {
-    const columns = [
-      createTemplateMatrixColumn(),
-      createTemplateMatrixColumn(),
-    ]
-
-    return {
-      id: createId("table"),
-      name: "",
-      country: "",
-      platform: "",
-      ruleType,
-      valueUnit: "",
-      sourceUrl: "",
-      remark: "",
-      xAxisLabel: "售价",
-      yAxisLabel: "重量",
-      columns,
-      rows: [
-        createTemplateMatrixRow(columns),
-        createTemplateMatrixRow(columns),
-      ],
-    }
-  }
-
-  return {
+  const createBaseTable = () => ({
     id: createId("table"),
     name: "",
     country: "",
@@ -176,7 +240,103 @@ export function createTemplateTable(ruleType = "fixed") {
     valueUnit: "",
     sourceUrl: "",
     remark: "",
+    dimensions: [],
+    resultColumns: [createTemplateResultColumn()],
+    records: [],
+  })
+
+  if (ruleType === "range_2d") {
+    const columns = [
+      createTemplateMatrixColumn(),
+      createTemplateMatrixColumn(),
+    ]
+    const baseTable = createBaseTable()
+
+    return {
+      ...baseTable,
+      xAxisLabel: "售价",
+      yAxisLabel: "重量",
+      columns,
+      rows: [
+        createTemplateMatrixRow(columns),
+        createTemplateMatrixRow(columns),
+      ],
+      dimensions: [
+        { id: createId("dimension"), fieldName: "售价", kind: "range" },
+        { id: createId("dimension"), fieldName: "重量", kind: "range" },
+      ],
+    }
+  }
+
+  const baseTable = createBaseTable()
+  if (ruleType === "range_1d") {
+    baseTable.dimensions = [
+      { id: createId("dimension"), fieldName: "参数 1", kind: "range" },
+    ]
+  }
+  else if (ruleType === "enum") {
+    baseTable.dimensions = [
+      { id: createId("dimension"), fieldName: "参数 1", kind: "enum" },
+    ]
+  }
+  else if (ruleType === "enum_pair") {
+    baseTable.dimensions = [
+      { id: createId("dimension"), fieldName: "参数 1", kind: "enum" },
+      { id: createId("dimension"), fieldName: "参数 2", kind: "enum" },
+    ]
+  }
+  else if (ruleType === "enum_range") {
+    baseTable.dimensions = [
+      { id: createId("dimension"), fieldName: "参数 1", kind: "enum" },
+      { id: createId("dimension"), fieldName: "参数 2", kind: "range" },
+    ]
+  }
+
+  return {
+    ...baseTable,
     rows: [createTemplateRow(ruleType)],
+  }
+}
+
+export const templateTableUiConfigMap = {
+  ml_br_commission: {
+    columnOverrides: {
+      matchKey: {
+        label: "类目",
+        placeholder: "选择类目",
+        fieldName: "类目",
+      },
+      matchKey2: {
+        label: "广告类型",
+        placeholder: "选择广告类型",
+        fieldName: "广告类型",
+      },
+      value: {
+        label: "佣金费率",
+        placeholder: "例如 14",
+      },
+      remark: {
+        label: "备注",
+        placeholder: "例如 官方后台查询结果",
+      },
+    },
+  },
+}
+
+export function getTemplateTableUiConfig(tableId = "") {
+  return templateTableUiConfigMap[tableId] || {}
+}
+
+export function mergeTemplateTableUiConfig(tableId = "", overrideConfig = {}) {
+  const baseConfig = getTemplateTableUiConfig(tableId)
+
+  return {
+    ...baseConfig,
+    ...overrideConfig,
+    columnOverrides: {
+      ...(baseConfig.columnOverrides || {}),
+      ...(overrideConfig.columnOverrides || {}),
+    },
   }
 }
 

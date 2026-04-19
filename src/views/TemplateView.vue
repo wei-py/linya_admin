@@ -2,18 +2,27 @@
 import { storeToRefs } from "pinia"
 import { computed, watch } from "vue"
 
+import {
+  createCalculationInputFields,
+  createProductBaseFields,
+} from "@/constants/create"
 import { countryOptions, platformOptions } from "@/constants/preset"
 import {
-  createTemplateMatrixColumn,
-  createTemplateMatrixRow,
-  createTemplateRow,
+  createTemplateDimension,
+  createTemplateRecord,
+  createTemplateResultColumn,
   createTemplateTable,
-  templateRuleTypeMetaMap,
+  getTemplateRuleTypeSummary,
   templateRuleTypeOptions,
 } from "@/constants/template"
 import { useOptionsStore } from "@/stores/options"
 import { usePresetStore } from "@/stores/preset"
 import { useTemplateStore } from "@/stores/template"
+import {
+  findOptionBackedFieldByName,
+  optionBackedFieldDefinitions,
+  resolveOptionGroupKey,
+} from "@/utils/app-fields"
 
 const optionsStore = useOptionsStore()
 const presetStore = usePresetStore()
@@ -24,56 +33,102 @@ const {
   activeTemplateTable,
   syncStatus,
 } = storeToRefs(templateStore)
-const { adTypeOptions, categoryOptions } = storeToRefs(optionsStore)
+const { getOptionLabelsByGroupKey, optionGroups } = storeToRefs(optionsStore)
 
 const hasExcelBinding = computed(() =>
   Boolean(presetStore.hasBoundExcelFile),
 )
 
 const selectedTable = computed(() => activeTemplateTable.value || null)
+const templateSchemaFieldCount = computed(
+  () =>
+    (selectedTable.value?.dimensions?.length || 0)
+    + (selectedTable.value?.resultColumns?.length || 0),
+)
+const templateBaseFieldCount = computed(
+  () => 6 + templateSchemaFieldCount.value,
+)
 
-const selectedRuleMeta = computed(() =>
-  selectedTable.value
-    ? templateRuleTypeMetaMap[selectedTable.value.ruleType]
-    : null,
-)
-const templateBaseFieldCount = 7
-const isRange2DTable = computed(
-  () => selectedTable.value?.ruleType === "range_2d",
-)
-const isEnumPairTable = computed(
-  () => selectedTable.value?.ruleType === "enum_pair",
-)
-const isCommissionTable = computed(
-  () => selectedTable.value?.id === "ml_br_commission",
-)
-const commissionAdTypeOptions = computed(() =>
-  adTypeOptions.value
-    .map(item => String(item || "").trim())
-    .filter(Boolean),
-)
+function getOptionValuesByGroupKey(groupKey = "") {
+  return getOptionLabelsByGroupKey.value(resolveOptionGroupKey(groupKey))
+}
+
+const configurableFieldCatalog = computed(() => {
+  const fieldMap = new Map()
+
+  createProductBaseFields.forEach((field) => {
+    const fieldName = String(field.label || "").trim()
+
+    if (!fieldName || fieldMap.has(fieldName)) {
+      return
+    }
+
+    fieldMap.set(fieldName, {
+      name: fieldName,
+      type: field.type || "text",
+      source: "product",
+    })
+  })
+
+  createCalculationInputFields.forEach((field) => {
+    const fieldName = String(field.label || "").trim()
+
+    if (!fieldName || fieldMap.has(fieldName)) {
+      return
+    }
+
+    fieldMap.set(fieldName, {
+      name: fieldName,
+      type: field.type || "text",
+      source: "calculation",
+    })
+  })
+
+  optionGroups.value.forEach((group) => {
+    const fieldName = String(group.title || "").trim()
+
+    if (!fieldName || fieldMap.has(fieldName)) {
+      return
+    }
+
+    fieldMap.set(fieldName, {
+      name: fieldName,
+      type: "option",
+      source: "options",
+      optionGroupKey: group.key,
+    })
+  })
+
+  optionBackedFieldDefinitions.forEach((field) => {
+    if (fieldMap.has(field.fieldName)) {
+      return
+    }
+
+    fieldMap.set(field.fieldName, {
+      name: field.fieldName,
+      type: "option",
+      source: "options",
+      optionGroupKey: field.optionGroupKey,
+    })
+  })
+
+  return Array.from(fieldMap.values())
+})
+
 const templateRuleContentMetaText = computed(() => {
   if (!selectedTable.value) {
     return "0 项"
   }
 
-  if (selectedTable.value.ruleType === "range_2d") {
-    return `${selectedTable.value.rows.length} 行 / ${selectedTable.value.columns.length} 列`
-  }
-
-  return `${selectedTable.value.rows.length} 行`
+  return `${selectedTable.value.records?.length || 0} 行`
 })
 const templateRuleContentDescription = computed(() => {
-  if (isRange2DTable.value) {
-    return "横向是售价区间，纵向是重量区间，每个单元格表示命中的结果值。"
-  }
-
-  if (isEnumPairTable.value) {
-    return "按两个离散值联合查结果。佣金表建议维护为 类目 + 广告类型 -> 佣金费率。"
-  }
-
-  return "按当前规则类型编辑每一行条件和值。"
+  return "规则表由多个维度和结果列组成。枚举可任意增加，区间也可任意增加。"
 })
+const selectedDimensions = computed(() => selectedTable.value?.dimensions || [])
+const selectedResultColumns = computed(
+  () => selectedTable.value?.resultColumns || [],
+)
 const templateSyncStatusText = computed(() => {
   if (!hasExcelBinding.value) {
     return "未绑定 Excel"
@@ -95,10 +150,13 @@ const templateSyncStatusText = computed(() => {
 })
 
 function getLookupExample(table) {
-  const ruleMeta = templateRuleTypeMetaMap[table.ruleType]
-  const args = ruleMeta?.lookupArgs || "{输入值}"
+  const args = (table?.dimensions || [])
+    .map(dimension => `{${dimension.fieldName || "参数"}}`)
+    .join(", ")
 
-  return `查表("${table.name || "未命名规则表"}", ${args})`
+  return args
+    ? `查表("${table.name || "未命名规则表"}", ${args})`
+    : `查表("${table.name || "未命名规则表"}")`
 }
 
 function getTemplateTableClass(tableId) {
@@ -116,79 +174,123 @@ function getTemplateTableClass(tableId) {
 }
 
 function getTemplateTableSummary(table) {
-  const ruleTypeTitle = templateRuleTypeMetaMap[table.ruleType]?.title || "未设置类型"
-
-  if (table.ruleType === "range_2d") {
-    return `${ruleTypeTitle} · ${table.rows.length} 行 / ${table.columns.length} 列`
-  }
-
-  return `${ruleTypeTitle} · ${table.rows.length} 行`
+  return `${getTemplateRuleTypeSummary(table.dimensions || [])} · ${table.records?.length || 0} 行`
 }
 
-function getRuleTableColumnStyle(columnKey) {
-  if (["xMin", "xMax", "yMin", "yMax", "value"].includes(columnKey)) {
+function getRuleTableColumnStyle(column) {
+  if (column.kind === "range") {
     return { width: "136px" }
   }
 
-  if (["matchKey", "matchKey2"].includes(columnKey)) {
-    return { width: "180px" }
-  }
-
-  return undefined
-}
-
-function getRuleTableColumns(table, ruleMeta) {
-  const columns = ruleMeta?.columns || []
-
-  if (!table || !columns.length) {
-    return columns
-  }
-
-  if (table.ruleType === "enum_pair" && table.id === "ml_br_commission") {
-    return columns.map((column) => {
-      if (column.key === "matchKey") {
-        return { ...column, label: "类目", placeholder: "例如 美妆个护" }
-      }
-
-      if (column.key === "matchKey2") {
-        return { ...column, label: "广告类型", placeholder: "选择已配置广告类型" }
-      }
-
-      if (column.key === "value") {
-        return { ...column, label: "佣金费率", placeholder: "例如 14" }
-      }
-
-      if (column.key === "remark") {
-        return { ...column, label: "备注", placeholder: "例如 官方后台查询结果" }
-      }
-
-      return column
-    })
-  }
-
-  return columns
-}
-
-const selectedRuleColumns = computed(() =>
-  getRuleTableColumns(selectedTable.value, selectedRuleMeta.value),
-)
-
-function getMatrixValueColumnStyle() {
-  const columnCount = selectedTable.value?.columns.length || 0
-
-  if (columnCount <= 3) {
+  if (column.kind === "enum") {
     return { width: "168px" }
   }
 
-  if (columnCount <= 5) {
-    return { width: "148px" }
+  return { width: "144px" }
+}
+
+const selectedRuleColumns = computed(() => {
+  const dimensions = selectedDimensions.value.flatMap((dimension) => {
+    const fieldSource = resolveFieldSourceDescriptor(dimension.fieldName)
+
+    if (dimension.kind === "range") {
+      return [
+        {
+          id: `${dimension.id}__min`,
+          key: `${dimension.id}__min`,
+          label: `${dimension.fieldName || "区间"}起始`,
+          kind: "range",
+          type: "number",
+        },
+        {
+          id: `${dimension.id}__max`,
+          key: `${dimension.id}__max`,
+          label: `${dimension.fieldName || "区间"}结束`,
+          kind: "range",
+          type: "number",
+        },
+      ]
+    }
+
+    return [
+      {
+        id: dimension.id,
+        key: dimension.id,
+        label: dimension.fieldName || "枚举值",
+        kind: "enum",
+        type: "text",
+        control: fieldSource.control,
+        optionGroupKey: fieldSource.optionGroupKey,
+      },
+    ]
+  })
+  const resultColumns = selectedResultColumns.value.map(column => ({
+    id: column.id,
+    key: column.id,
+    label: column.label || "结果值",
+    kind: "result",
+    type: column.type || "number",
+  }))
+  const remarkColumn = {
+    id: "remark",
+    key: "remark",
+    label: "备注",
+    kind: "remark",
+    type: "text",
   }
 
-  if (columnCount <= 7) {
-    return { width: "132px" }
+  return [...dimensions, ...resultColumns, remarkColumn]
+})
+
+function getRuleColumnItems(column) {
+  return getOptionValuesByGroupKey(column.optionGroupKey)
+}
+
+function resolveFieldSourceDescriptor(value = "") {
+  const fieldName = String(value || "").trim()
+
+  if (!fieldName) {
+    return {
+      fieldName: "",
+      control: "text",
+      optionGroupKey: "",
+    }
   }
 
-  return { width: "120px" }
+  const matchedGroup = optionGroups.value.find((group) => {
+    const title = String(group.title || "").trim()
+    const key = String(group.key || "").trim()
+
+    return (
+      title === fieldName
+      || key === fieldName
+      || key === resolveOptionGroupKey(fieldName)
+    )
+  })
+
+  if (matchedGroup) {
+    return {
+      fieldName: String(matchedGroup.title || fieldName).trim(),
+      control: "select",
+      optionGroupKey: matchedGroup.key,
+    }
+  }
+
+  const matchedField = findOptionBackedFieldByName(fieldName)
+
+  if (matchedField) {
+    return {
+      fieldName: matchedField.fieldName,
+      control: "select",
+      optionGroupKey: matchedField.optionGroupKey,
+    }
+  }
+
+  return {
+    fieldName,
+    control: "text",
+    optionGroupKey: "",
+  }
 }
 
 function handleAddTable() {
@@ -211,11 +313,19 @@ function handleRuleTypeChange(value) {
 
   const nextShape = createTemplateTable(value)
 
-  selectedTable.value.ruleType = value
-  selectedTable.value.rows = nextShape.rows
-  selectedTable.value.columns = nextShape.columns || []
-  selectedTable.value.xAxisLabel = nextShape.xAxisLabel || "售价"
-  selectedTable.value.yAxisLabel = nextShape.yAxisLabel || "重量"
+  Object.assign(selectedTable.value, {
+    ruleType: value,
+    dimensions: nextShape.dimensions || [],
+    resultColumns: nextShape.resultColumns || [],
+    records: [createTemplateRecord(
+      nextShape.dimensions || [],
+      nextShape.resultColumns || [],
+    )],
+    rows: nextShape.rows || [],
+    columns: nextShape.columns || [],
+    xAxisLabel: nextShape.xAxisLabel || "",
+    yAxisLabel: nextShape.yAxisLabel || "",
+  })
   templateStore.persistTemplateChanges()
 }
 
@@ -223,25 +333,12 @@ function handleAddRow() {
   if (!selectedTable.value)
     return
 
-  if (selectedTable.value.ruleType === "range_2d") {
-    selectedTable.value.rows.push(
-      createTemplateMatrixRow(selectedTable.value.columns || []),
-    )
-    return
-  }
-
-  selectedTable.value.rows.push(createTemplateRow(selectedTable.value.ruleType))
-  templateStore.persistTemplateChanges()
-}
-
-function handleAddEnumPairPresetRow(matchKey2 = "") {
-  if (!selectedTable.value || selectedTable.value.ruleType !== "enum_pair")
-    return
-
-  selectedTable.value.rows.push({
-    ...createTemplateRow("enum_pair"),
-    matchKey2,
-  })
+  selectedTable.value.records.push(
+    createTemplateRecord(
+      selectedTable.value.dimensions || [],
+      selectedTable.value.resultColumns || [],
+    ),
+  )
   templateStore.persistTemplateChanges()
 }
 
@@ -249,46 +346,125 @@ function handleRemoveRow(rowId) {
   if (!selectedTable.value)
     return
 
-  selectedTable.value.rows = selectedTable.value.rows.filter(
+  selectedTable.value.records = selectedTable.value.records.filter(
     item => item.id !== rowId,
   )
 
-  if (!selectedTable.value.rows.length) {
-    selectedTable.value.rows = selectedTable.value.ruleType === "range_2d"
-      ? [createTemplateMatrixRow(selectedTable.value.columns || [])]
-      : [createTemplateRow(selectedTable.value.ruleType)]
+  if (!selectedTable.value.records.length) {
+    selectedTable.value.records = [
+      createTemplateRecord(
+        selectedTable.value.dimensions || [],
+        selectedTable.value.resultColumns || [],
+      ),
+    ]
   }
 
   templateStore.persistTemplateChanges()
 }
 
-function handleAddColumn() {
-  if (!selectedTable.value || selectedTable.value.ruleType !== "range_2d")
+function handleAddDimension(kind = "enum") {
+  if (!selectedTable.value)
     return
 
-  const nextColumn = createTemplateMatrixColumn()
+  const nextDimension = createTemplateDimension(kind)
 
-  selectedTable.value.columns.push(nextColumn)
-  selectedTable.value.rows.forEach((row) => {
-    row.values[nextColumn.id] = ""
+  selectedTable.value.dimensions.push(nextDimension)
+  selectedTable.value.records.forEach((record) => {
+    if (!record.values) {
+      record.values = {}
+    }
+
+    if (nextDimension.kind === "range") {
+      record.values[`${nextDimension.id}__min`] = ""
+      record.values[`${nextDimension.id}__max`] = ""
+      return
+    }
+
+    record.values[nextDimension.id] = ""
   })
   templateStore.persistTemplateChanges()
 }
 
-function handleRemoveColumn(columnId) {
-  if (!selectedTable.value || selectedTable.value.ruleType !== "range_2d")
+function handleRemoveDimension(dimensionId) {
+  if (!selectedTable.value)
     return
 
-  selectedTable.value.columns = selectedTable.value.columns.filter(
-    item => item.id !== columnId,
+  selectedTable.value.dimensions = selectedTable.value.dimensions.filter(
+    item => item.id !== dimensionId,
   )
-
-  selectedTable.value.rows.forEach((row) => {
-    delete row.values[columnId]
+  selectedTable.value.records.forEach((record) => {
+    delete record.values?.[dimensionId]
+    delete record.values?.[`${dimensionId}__min`]
+    delete record.values?.[`${dimensionId}__max`]
   })
 
-  if (!selectedTable.value.columns.length) {
-    handleAddColumn()
+  templateStore.persistTemplateChanges()
+}
+
+function handleDimensionKindChange(dimension, nextKind) {
+  if (!selectedTable.value || !dimension) {
+    return
+  }
+
+  const normalizedKind = nextKind === "range" ? "range" : "enum"
+  const previousKind = dimension.kind
+
+  if (previousKind === normalizedKind) {
+    return
+  }
+
+  selectedTable.value.records.forEach((record) => {
+    if (normalizedKind === "range") {
+      const previousValue = record.values?.[dimension.id] ?? ""
+
+      delete record.values?.[dimension.id]
+      record.values[`${dimension.id}__min`] = previousValue
+      record.values[`${dimension.id}__max`] = ""
+      return
+    }
+
+    const nextValue = record.values?.[`${dimension.id}__min`] ?? ""
+
+    delete record.values?.[`${dimension.id}__min`]
+    delete record.values?.[`${dimension.id}__max`]
+    record.values[dimension.id] = nextValue
+  })
+
+  dimension.kind = normalizedKind
+  templateStore.persistTemplateChanges()
+}
+
+function handleAddResultColumn() {
+  if (!selectedTable.value)
+    return
+
+  const nextColumn = createTemplateResultColumn()
+
+  selectedTable.value.resultColumns.push(nextColumn)
+  selectedTable.value.records.forEach((record) => {
+    if (!record.values) {
+      record.values = {}
+    }
+
+    record.values[nextColumn.id] = ""
+  })
+  templateStore.persistTemplateChanges()
+}
+
+function handleRemoveResultColumn(columnId) {
+  if (!selectedTable.value)
+    return
+
+  selectedTable.value.resultColumns = selectedTable.value.resultColumns.filter(
+    item => item.id !== columnId,
+  )
+  selectedTable.value.records.forEach((record) => {
+    delete record.values?.[columnId]
+  })
+
+  if (!selectedTable.value.resultColumns.length) {
+    handleAddResultColumn()
+    return
   }
 
   templateStore.persistTemplateChanges()
@@ -460,15 +636,143 @@ watch(
               />
             </div>
 
-            <div
-              v-if="selectedRuleMeta"
-              class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-2"
-            >
-              <div class="text-sm font-semibold text-[#161616]">
-                {{ selectedRuleMeta.title }}
+            <div class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-3">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">维度配置</div>
+                <div class="workspace-subsection-meta">
+                  {{ selectedDimensions.length }} 项
+                </div>
               </div>
-              <div class="mt-0.5 text-sm text-[#525252]">
-                {{ selectedRuleMeta.description }}
+
+              <div class="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div
+                  v-for="dimension in selectedDimensions"
+                  :key="dimension.id"
+                  class="surface-field surface-field--compact"
+                >
+                  <div class="surface-field__label">字段名</div>
+                  <VTextField
+                    v-model="dimension.fieldName"
+                    class="surface-field__control"
+                    :placeholder="
+                      configurableFieldCatalog
+                        .slice(0, 4)
+                        .map(item => item.name)
+                        .join(' / ')
+                    "
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                  />
+                  <div class="mt-2 flex items-center justify-between gap-2">
+                    <VSelect
+                      :model-value="dimension.kind"
+                      :items="[
+                        { title: '枚举', value: 'enum' },
+                        { title: '区间', value: 'range' },
+                      ]"
+                      item-title="title"
+                      item-value="value"
+                      class="surface-field__control"
+                      variant="plain"
+                      hide-details
+                      density="compact"
+                      @update:model-value="
+                        value => handleDimensionKindChange(dimension, value)
+                      "
+                    />
+                    <VBtn
+                      color="error"
+                      variant="text"
+                      size="small"
+                      density="compact"
+                      @click="handleRemoveDimension(dimension.id)"
+                    >
+                      删除维度
+                    </VBtn>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <VBtn
+                  variant="tonal"
+                  size="small"
+                  density="compact"
+                  @click="handleAddDimension('enum')"
+                >
+                  添加枚举维度
+                </VBtn>
+                <VBtn
+                  variant="tonal"
+                  size="small"
+                  density="compact"
+                  @click="handleAddDimension('range')"
+                >
+                  添加区间维度
+                </VBtn>
+              </div>
+              <div class="mt-2 text-xs text-[#6f6f6f]">
+                这里直接填写中文字段名，例如“类目”“广告类型”“是否包邮”“交易费率”“重量”。若存在同名选项分组，会自动按下拉渲染。
+              </div>
+            </div>
+
+            <div class="border border-[#e0e0e0] bg-[#f8f8f8] px-3 py-3">
+              <div class="workspace-subsection-header">
+                <div class="workspace-subsection-title">结果列配置</div>
+                <div class="workspace-subsection-meta">
+                  {{ selectedResultColumns.length }} 项
+                </div>
+              </div>
+              <div class="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                <div
+                  v-for="column in selectedResultColumns"
+                  :key="column.id"
+                  class="surface-field surface-field--compact"
+                >
+                  <div class="surface-field__label">结果列名称</div>
+                  <VTextField
+                    v-model="column.label"
+                    class="surface-field__control"
+                    placeholder="例如 佣金费率 / 固定附加费"
+                    variant="plain"
+                    hide-details
+                    density="compact"
+                  />
+                  <div class="mt-2 flex items-center justify-between gap-2">
+                    <VSelect
+                      v-model="column.type"
+                      :items="[
+                        { title: '数值', value: 'number' },
+                        { title: '文本', value: 'text' },
+                      ]"
+                      item-title="title"
+                      item-value="value"
+                      class="surface-field__control"
+                      variant="plain"
+                      hide-details
+                      density="compact"
+                    />
+                    <VBtn
+                      color="error"
+                      variant="text"
+                      size="small"
+                      density="compact"
+                      @click="handleRemoveResultColumn(column.id)"
+                    >
+                      删除结果列
+                    </VBtn>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <VBtn
+                  variant="tonal"
+                  size="small"
+                  density="compact"
+                  @click="handleAddResultColumn"
+                >
+                  添加结果列
+                </VBtn>
               </div>
               <div class="mt-2 text-sm text-[#161616]">
                 预设引用方式：
@@ -503,198 +807,19 @@ watch(
                 </div>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <template v-if="isCommissionTable">
-                  <VBtn
-                    v-for="adType in commissionAdTypeOptions"
-                    :key="adType"
-                    variant="tonal"
-                    size="small"
-                    density="compact"
-                    @click="handleAddEnumPairPresetRow(adType)"
-                  >
-                    添加 {{ adType }}
-                  </VBtn>
-                </template>
-                <VBtn
-                  v-if="isRange2DTable"
-                  variant="tonal"
-                  size="small"
-                  density="compact"
-                  @click="handleAddColumn"
-                >
-                  添加本列
-                </VBtn>
                 <VBtn
                   variant="tonal"
                   size="small"
                   density="compact"
                   @click="handleAddRow"
                 >
-                  {{ isRange2DTable ? "添加本行" : "添加规则行" }}
+                  添加行
                 </VBtn>
               </div>
             </div>
           </div>
 
-          <div v-if="isRange2DTable" class="space-y-3 p-4">
-            <div class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-              <div class="surface-field surface-field--compact xl:col-span-2">
-                <div class="surface-field__label">横轴名称</div>
-                <VTextField
-                  v-model="selectedTable.xAxisLabel"
-                  class="surface-field__control"
-                  placeholder="例如 售价"
-                  variant="plain"
-                  hide-details
-                  density="compact"
-                />
-              </div>
-              <div class="surface-field surface-field--compact xl:col-span-2">
-                <div class="surface-field__label">纵轴名称</div>
-                <VTextField
-                  v-model="selectedTable.yAxisLabel"
-                  class="surface-field__control"
-                  placeholder="例如 重量"
-                  variant="plain"
-                  hide-details
-                  density="compact"
-                />
-              </div>
-            </div>
-
-            <div
-              class="
-                overflow-x-auto rounded-[2px] border border-[#c6c6c6]
-              "
-            >
-              <VTable
-                density="compact"
-                class="w-max min-w-full table-fixed bg-white"
-              >
-                <colgroup>
-                  <col style="width: 132px">
-                  <col
-                    v-for="column in selectedTable.columns"
-                    :key="column.id"
-                    :style="getMatrixValueColumnStyle()"
-                  >
-                  <col style="width: 72px">
-                </colgroup>
-                <thead>
-                  <tr
-                    class="
-                      border-b border-[#c6c6c6] bg-[#f4f4f4] text-center
-                      text-sm
-                    "
-                  >
-                    <th
-                      class="
-                        relative h-24 min-w-[124px]
-                        border-r border-[#c6c6c6] bg-[#f4f4f4]
-                      "
-                    >
-                      <div
-                        class="absolute inset-0"
-                        style="
-                          background: linear-gradient(
-                            to top right,
-                            transparent 49.5%,
-                            rgb(198 198 198) 50%,
-                            transparent 50.5%
-                          );
-                        "
-                      />
-                      <div class="absolute left-4 bottom-3 text-[#525252]">
-                        {{ selectedTable.yAxisLabel || "纵轴" }}
-                      </div>
-                      <div class="absolute top-3 right-4 text-[#525252]">
-                        {{ selectedTable.xAxisLabel || "横轴" }}
-                      </div>
-                    </th>
-                    <th
-                      v-for="column in selectedTable.columns"
-                      :key="column.id"
-                      class="border-r border-[#c6c6c6] "
-                    >
-                      <VTextField
-                        v-model="column.label"
-                        variant="plain"
-                        placeholder="区间上限"
-                        hide-details
-                        density="compact"
-                      />
-                      <div class="mt-2">
-                        <VBtn
-                          color="error"
-                          variant="text"
-                          size="small"
-                          density="compact"
-                          @click="handleRemoveColumn(column.id)"
-                        >
-                          删除本列
-                        </VBtn>
-                      </div>
-                    </th>
-                    <th
-                      class="
-                        px-1 py-2 text-center text-[#525252]
-                      "
-                    >
-                      操作
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="row in selectedTable.rows"
-                    :key="row.id"
-                    class="border-b border-[#e0e0e0] hover:bg-[#f8f8f8]"
-                  >
-                    <td class="border-r border-[#e0e0e0] ">
-                      <VTextField
-                        v-model="row.label"
-                        variant="plain"
-                        placeholder="行区间上限"
-                        hide-details
-                        density="compact"
-                      />
-                    </td>
-                    <td
-                      v-for="column in selectedTable.columns"
-                      :key="`${row.id}_${column.id}`"
-                      class="border-r border-[#e0e0e0] "
-                    >
-                      <VTextField
-                        v-model="row.values[column.id]"
-                        variant="plain"
-                        placeholder="结果值"
-                        hide-details
-                        density="compact"
-                      />
-                    </td>
-                    <td
-                      class="
-                        px-1 text-center align-middle
-                      "
-                    >
-                      <VBtn
-                        color="error"
-                        variant="text"
-                        size="small"
-                        density="compact"
-                        class="min-w-0 px-1 text-xs"
-                        @click="handleRemoveRow(row.id)"
-                      >
-                        删除
-                      </VBtn>
-                    </td>
-                  </tr>
-                </tbody>
-              </VTable>
-            </div>
-          </div>
-
-          <div v-else class="overflow-x-auto p-4">
+          <div class="overflow-x-auto p-4">
             <div
               class="
                 overflow-hidden rounded-[2px] border border-[#c6c6c6]
@@ -707,8 +832,8 @@ watch(
                 <colgroup>
                   <col
                     v-for="column in selectedRuleColumns"
-                    :key="column.key"
-                    :style="getRuleTableColumnStyle(column.key)"
+                    :key="column.id"
+                    :style="getRuleTableColumnStyle(column)"
                   >
                   <col style="width: 72px">
                 </colgroup>
@@ -721,7 +846,7 @@ watch(
                   >
                     <th
                       v-for="column in selectedRuleColumns"
-                      :key="column.key"
+                      :key="column.id"
                       class="border-r px-3 py-2 font-medium"
                     >
                       {{ column.label }}
@@ -737,34 +862,28 @@ watch(
                 </thead>
                 <tbody>
                   <tr
-                    v-for="row in selectedTable.rows"
+                    v-for="row in selectedTable.records"
                     :key="row.id"
                     class="align-top hover:bg-[#f8f8f8]"
                   >
                     <td
                       v-for="column in selectedRuleColumns"
-                      :key="column.key"
+                      :key="column.id"
                       class="border-r px-3"
                     >
                       <VSelect
-                        v-if="
-                          isCommissionTable
-                            && column.key === 'matchKey'
-                        "
-                        v-model="row[column.key]"
-                        :items="categoryOptions"
+                        v-if="column.control === 'select'"
+                        v-model="row.values[column.key]"
+                        :items="getRuleColumnItems(column)"
                         :placeholder="column.placeholder || column.label"
                         variant="plain"
                         hide-details
                         density="compact"
                       />
-                      <VSelect
-                        v-else-if="
-                          isCommissionTable
-                            && column.key === 'matchKey2'
-                        "
-                        v-model="row[column.key]"
-                        :items="adTypeOptions"
+                      <VTextField
+                        v-else-if="column.key === 'remark'"
+                        v-model="row.remark"
+                        :type="column.type"
                         :placeholder="column.placeholder || column.label"
                         variant="plain"
                         hide-details
@@ -772,7 +891,7 @@ watch(
                       />
                       <VTextField
                         v-else
-                        v-model="row[column.key]"
+                        v-model="row.values[column.key]"
                         :type="column.type"
                         :placeholder="column.placeholder || column.label"
                         variant="plain"
