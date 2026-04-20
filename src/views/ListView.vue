@@ -11,6 +11,7 @@ import {
   watch,
 } from "vue"
 
+import { listTableColumnConfigs } from "@/constants/list"
 import { useListStore } from "@/stores/list"
 import {
   isTauriApp,
@@ -48,31 +49,7 @@ const {
 
 const imageCount = computed(() => listStore.images.length)
 const variantCount = computed(() => listStore.variants.length)
-const listTableColumns = [
-  { key: "countryPlatform", label: "国家 / 平台" },
-  { key: "category", label: "类目" },
-  { key: "adType", label: "广告类型" },
-  { key: "currentBenchmark", label: "当前基准" },
-  { key: "shippingIncluded", label: "商品是否包邮" },
-  { key: "shippingDefault", label: "预设是否包邮" },
-  { key: "cost", label: "成本", type: "money" },
-  { key: "weight", label: "重量(g)" },
-  { key: "sellerShipping", label: "卖家运费", type: "money" },
-  { key: "totalFee", label: "总费用", type: "money" },
-  { key: "discountPrice", label: "折后价", type: "money" },
-  { key: "listPrice", label: "折前价", type: "money" },
-  { key: "revenue", label: "收入", type: "money" },
-  { key: "profitRate", label: "利润率", type: "percent" },
-  { key: "netProfit", label: "净利润", type: "money" },
-  { key: "activityFee", label: "活动费", type: "money" },
-  { key: "transactionFee", label: "交易费", type: "money" },
-  { key: "commissionFee", label: "佣金费", type: "money" },
-  { key: "withdrawFee", label: "提现费", type: "money" },
-  { key: "exchangeLossFee", label: "汇损金额", type: "money" },
-  { key: "taxFee", label: "税费", type: "money" },
-  { key: "labelFee", label: "贴单费", type: "money" },
-  { key: "fixedSurcharge", label: "固定附加", type: "money" },
-]
+const listTableColumns = listTableColumnConfigs
 
 function resolveImageSrc(image) {
   const source = String(image?.filePath ?? "").trim()

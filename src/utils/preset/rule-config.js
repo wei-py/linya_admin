@@ -1,3 +1,6 @@
+import { createCalculationDriverFieldConfigs } from "@/constants/create"
+import { optionBackedFieldDefinitions } from "@/utils/app-fields"
+
 export const presetRuleModeOptions = [
   { title: "查表规则", value: "table" },
   { title: "条件规则", value: "condition" },
@@ -5,16 +8,16 @@ export const presetRuleModeOptions = [
 ]
 
 export const presetRuleFieldOptions = [
-  { title: "折后售价", value: "折后售价" },
-  { title: "折前价格", value: "折前价格" },
-  { title: "收入", value: "收入" },
-  { title: "利润率", value: "利润率" },
-  { title: "净利润", value: "净利润" },
+  ...createCalculationDriverFieldConfigs.map(field => ({
+    title: field.label,
+    value: field.label,
+  })),
   { title: "重量", value: "重量" },
-  { title: "类目", value: "类目" },
-  { title: "广告类型", value: "广告类型" },
+  ...optionBackedFieldDefinitions.map(field => ({
+    title: field.fieldName,
+    value: field.fieldName,
+  })),
   { title: "物流", value: "物流" },
-  { title: "是否包邮", value: "是否包邮" },
 ]
 
 export const presetRuleOperatorOptions = [

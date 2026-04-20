@@ -1,3 +1,5 @@
+import { createCalculationDriverFieldConfigs } from "@/constants/create"
+
 function slugify(value = "") {
   const normalized = String(value ?? "")
     .trim()
@@ -64,6 +66,14 @@ function cloneJson(value) {
   catch {
     return value
   }
+}
+
+function resolveCalculationDriverLabel(key = "", fallback = "") {
+  return (
+    createCalculationDriverFieldConfigs.find(field => field.key === key)?.label
+    || fallback
+    || key
+  )
 }
 
 export function buildListProductBundle(payload = {}) {
@@ -147,7 +157,10 @@ export function buildListProductBundle(payload = {}) {
       profitRate: formatNumber(calculationSnapshot.profitRate),
       netProfit: formatNumber(calculationSnapshot.netProfit),
       revenue: formatNumber(calculationSnapshot.revenue),
-      currentBenchmark: calculationDriverText || calculationDriver,
+      currentBenchmark: resolveCalculationDriverLabel(
+        calculationDriver,
+        calculationDriverText,
+      ),
       currentBenchmarkKey: calculationDriver,
       shippingDefault: toText(calculationSnapshot.shippingDefault),
       activityFee: formatNumber(calculationSnapshot.activityFee),

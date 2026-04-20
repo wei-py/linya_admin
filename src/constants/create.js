@@ -1,5 +1,17 @@
 import { optionBackedFieldDefinitions } from "@/utils/app-fields"
 
+const shippingIncludedFieldDefinition = optionBackedFieldDefinitions.find(
+  field => field.formKey === "shippingIncluded",
+)
+
+const categoryFieldDefinition = optionBackedFieldDefinitions.find(
+  field => field.formKey === "category",
+)
+
+const adTypeFieldDefinition = optionBackedFieldDefinitions.find(
+  field => field.formKey === "adType",
+)
+
 export const createPresetFieldDefinitions = {
   discountRate: { name: "折扣", control: "number" },
   activityRate: { name: "活动费率", control: "number" },
@@ -18,15 +30,50 @@ export const createPresetSummaryFieldConfigs = [
   createPresetFieldDefinitions.taxRate,
   createPresetFieldDefinitions.labelFee,
   {
-    ...optionBackedFieldDefinitions.find(
-      field => field.formKey === "shippingIncluded",
-    ),
-    name:
-      optionBackedFieldDefinitions.find(
-        field => field.formKey === "shippingIncluded",
-      )?.fieldName || "是否包邮",
+    ...shippingIncludedFieldDefinition,
+    name: shippingIncludedFieldDefinition?.fieldName || "是否包邮",
     control: "select",
   },
+]
+
+export const createPrimaryResultHighlightConfigs = [
+  { label: "净利润", snapshotKey: "netProfit", valueType: "money" },
+  { label: "利润率", snapshotKey: "profitRate", valueType: "percent" },
+]
+
+export const createResultSummaryConfigs = [
+  { label: "当前基准", valueKey: "currentBenchmark", valueType: "plain" },
+  { label: "折前价", snapshotKey: "listPrice", valueType: "money" },
+  { label: "折后价", snapshotKey: "discountPrice", valueType: "money" },
+  { label: "收入", snapshotKey: "revenue", valueType: "money" },
+  { label: "总费用", snapshotKey: "totalFee", valueType: "money" },
+  {
+    label: `当前${shippingIncludedFieldDefinition?.fieldName || "是否包邮"}`,
+    snapshotKey: "shippingIncluded",
+    valueType: "plain",
+  },
+  {
+    label: `预设${shippingIncludedFieldDefinition?.fieldName || "是否包邮"}`,
+    snapshotKey: "shippingDefault",
+    valueType: "plain",
+  },
+]
+
+export const createFeeSummaryConfigs = [
+  { label: "活动费", snapshotKey: "activityFee", valueType: "money" },
+  { label: "交易费", snapshotKey: "transactionFee", valueType: "money" },
+  { label: "提现费", snapshotKey: "withdrawFee", valueType: "money" },
+  { label: "汇损金额", snapshotKey: "exchangeLossFee", valueType: "money" },
+  { label: "税费", snapshotKey: "taxFee", valueType: "money" },
+  {
+    label: "贴单费",
+    snapshotKey: "labelFee",
+    valueType: "money",
+    unitPresetFieldKey: "labelFee",
+  },
+  { label: "卖家运费", snapshotKey: "sellerShipping", valueType: "money" },
+  { label: "固定附加", snapshotKey: "fixedSurcharge", valueType: "money" },
+  { label: "成本", formKey: "cost", valueType: "money" },
 ]
 
 export const createCalculationInputFields = [
@@ -74,6 +121,14 @@ export const createCalculationInputFields = [
   },
 ]
 
+export const createCalculationDriverFieldConfigs = [
+  { key: "listPrice", label: "折前价格" },
+  { key: "discountPrice", label: "折后售价" },
+  { key: "revenue", label: "收入" },
+  { key: "profitRate", label: "利润率" },
+  { key: "netProfit", label: "净利润" },
+]
+
 export const createProductBaseFields = [
   {
     key: "name",
@@ -112,32 +167,27 @@ export const createProductBaseFields = [
   },
   {
     key: "category",
-    label: "类目",
-    placeholder: "选择类目",
+    label: categoryFieldDefinition?.fieldName || "类目",
+    placeholder: `选择${categoryFieldDefinition?.fieldName || "类目"}`,
     type: "text",
     control: "select",
-    optionSource: optionBackedFieldDefinitions.find(
-      field => field.formKey === "category",
-    )?.optionSource || "category",
+    optionSource: categoryFieldDefinition?.optionSource || "category",
   },
   {
     key: "adType",
-    label: "广告类型",
-    placeholder: "选择广告类型",
+    label: adTypeFieldDefinition?.fieldName || "广告类型",
+    placeholder: `选择${adTypeFieldDefinition?.fieldName || "广告类型"}`,
     type: "text",
     control: "select",
-    optionSource: optionBackedFieldDefinitions.find(
-      field => field.formKey === "adType",
-    )?.optionSource || "adType",
+    optionSource: adTypeFieldDefinition?.optionSource || "adType",
   },
   {
     key: "shippingIncluded",
-    label: "是否包邮",
-    placeholder: "选择是否包邮",
+    label: shippingIncludedFieldDefinition?.fieldName || "是否包邮",
+    placeholder: `选择${shippingIncludedFieldDefinition?.fieldName || "是否包邮"}`,
     type: "text",
     control: "select",
-    optionSource: optionBackedFieldDefinitions.find(
-      field => field.formKey === "shippingIncluded",
-    )?.optionSource || "shippingIncluded",
+    optionSource:
+      shippingIncludedFieldDefinition?.optionSource || "shippingIncluded",
   },
 ]

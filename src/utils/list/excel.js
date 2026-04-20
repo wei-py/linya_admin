@@ -1,6 +1,11 @@
 import ExcelJS from "exceljs"
 import * as XLSX from "xlsx"
 
+import {
+  listMainSheetColumnConfigs,
+  listRecordFieldConfigs,
+  listRecordSheetColumnConfigs,
+} from "@/constants/list"
 import { isTauriApp, readBinaryFile } from "@/utils/tauri/excel-file"
 
 export const LIST_MAIN_SHEET_NAME = "商品列表"
@@ -11,37 +16,7 @@ export const LIST_FIELDS_SHEET_NAME = "扩展字段"
 export const LIST_META_SHEET_NAME = "程序信息"
 export const LIST_WORKBOOK_VERSION = "2"
 
-const MAIN_COLUMNS = [
-  "名称",
-  "款号",
-  "图片",
-  "变体",
-  "国家",
-  "平台",
-  "类目",
-  "广告类型",
-  "是否包邮",
-  "当前基准",
-  "成本",
-  "重量(g)",
-  "境内运费",
-  "总费用(R$)",
-  "折后价格(R$)",
-  "折前价格(R$)",
-  "利润率",
-  "净利润(R$)",
-  "收入(R$)",
-  "预设是否包邮",
-  "活动费",
-  "交易费",
-  "佣金费",
-  "提现费",
-  "汇损",
-  "税费",
-  "贴单费",
-  "固定附加费",
-  "备注",
-]
+const MAIN_COLUMNS = listMainSheetColumnConfigs.map(config => config.header)
 
 const IMAGE_COLUMNS = [
   "id",
@@ -86,44 +61,7 @@ const META_COLUMNS = [
   "description",
 ]
 
-const RECORD_COLUMNS = [
-  "id",
-  "name",
-  "sku",
-  "global_sku",
-  "country",
-  "platform",
-  "category",
-  "ad_type",
-  "shipping_included",
-  "current_benchmark",
-  "current_benchmark_key",
-  "cost",
-  "weight",
-  "seller_shipping",
-  "total_fee",
-  "discount_price",
-  "list_price",
-  "profit_rate",
-  "net_profit",
-  "revenue",
-  "shipping_default",
-  "activity_fee",
-  "transaction_fee",
-  "commission_fee",
-  "withdraw_fee",
-  "exchange_loss_fee",
-  "tax_fee",
-  "label_fee",
-  "fixed_surcharge",
-  "notes",
-  "cover_image_id",
-  "variant_summary",
-  "preset_snapshot_json",
-  "calculation_snapshot_json",
-  "created_at",
-  "updated_at",
-]
+const RECORD_COLUMNS = listRecordSheetColumnConfigs
 
 function toText(value) {
   return String(value ?? "").trim()
@@ -162,48 +100,25 @@ function getPathBasename(value) {
   return toText(segments.at(-1))
 }
 
+function resolveConfigValue(item = {}, config = {}) {
+  const candidateValues = [
+    item[config.recordKey],
+    item[config.internalKey],
+    ...(config.aliases || []).map(alias => item[alias]),
+  ]
+
+  return candidateValues.find(
+    value => value !== undefined && value !== null && value !== "",
+  )
+}
+
 function normalizeListRecord(item = {}, index = 0) {
-  return {
+  const record = {
     id: toText(item.id) || `product_${Date.now()}_${index + 1}`,
-    name: toText(item.name || item["名称"]),
-    sku: toText(item.sku || item["款号"]),
-    globalSku: toText(item.globalSku || item["全球货号"]),
-    country: toText(item.country || item["国家"]),
-    platform: toText(item.platform || item["平台"]),
-    category: toText(item.category || item["类目"]),
-    adType: toText(item.adType || item["广告类型"]),
-    shippingIncluded: toText(item.shippingIncluded || item["是否包邮"]),
-    currentBenchmark: toText(
-      item.currentBenchmark || item.current_benchmark || item["当前基准"],
-    ),
+    globalSku: toText(item.globalSku || item.global_sku || item["全球货号"]),
     currentBenchmarkKey: toText(
       item.currentBenchmarkKey || item.current_benchmark_key,
     ),
-    cost: toNumberString(item.cost || item["成本"]),
-    weight: toNumberString(item.weight || item["重量(g)"]),
-    sellerShipping: toNumberString(item.sellerShipping || item["境内运费"]),
-    totalFee: toNumberString(
-      item.totalFee || item.total_fee || item["总费用(R$)"],
-    ),
-    discountPrice: toNumberString(
-      item.discountPrice || item["折后价格(R$)"],
-    ),
-    listPrice: toNumberString(item.listPrice || item["折前价格(R$)"]),
-    profitRate: toNumberString(item.profitRate || item["利润率"]),
-    netProfit: toNumberString(item.netProfit || item["净利润(R$)"]),
-    revenue: toNumberString(item.revenue || item["收入(R$)"]),
-    shippingDefault: toText(
-      item.shippingDefault || item.shipping_default || item["预设是否包邮"],
-    ),
-    activityFee: toNumberString(item.activityFee || item["活动费"]),
-    transactionFee: toNumberString(item.transactionFee || item["交易费"]),
-    commissionFee: toNumberString(item.commissionFee || item["佣金费"]),
-    withdrawFee: toNumberString(item.withdrawFee || item["提现费"]),
-    exchangeLossFee: toNumberString(item.exchangeLossFee || item["汇损"]),
-    taxFee: toNumberString(item.taxFee || item["税费"]),
-    labelFee: toNumberString(item.labelFee || item["贴单费"]),
-    fixedSurcharge: toNumberString(item.fixedSurcharge || item["固定附加费"]),
-    notes: toText(item.notes || item["备注"]),
     coverImageId: toText(item.coverImageId || item.cover_image_id),
     variantSummary: toText(item.variantSummary || item.variant_summary),
     presetSnapshotJson: toText(
@@ -215,6 +130,15 @@ function normalizeListRecord(item = {}, index = 0) {
     createdAt: toText(item.createdAt || item.created_at),
     updatedAt: toText(item.updatedAt || item.updated_at),
   }
+
+  listRecordFieldConfigs.forEach((config) => {
+    const rawValue = resolveConfigValue(item, config)
+    const nextValue = config.type ? toNumberString(rawValue) : toText(rawValue)
+
+    record[config.recordKey] = nextValue
+  })
+
+  return record
 }
 
 function normalizeImageEntry(item = {}, index = 0) {
@@ -361,37 +285,10 @@ export function importListWorkbookFromBytes(bytes) {
 }
 
 function recordToInternalRow(record = {}) {
-  return {
+  const row = {
     id: record.id,
-    name: record.name,
-    sku: record.sku,
     global_sku: record.globalSku,
-    country: record.country,
-    platform: record.platform,
-    category: record.category,
-    ad_type: record.adType,
-    shipping_included: record.shippingIncluded,
-    current_benchmark: record.currentBenchmark,
     current_benchmark_key: record.currentBenchmarkKey,
-    cost: record.cost,
-    weight: record.weight,
-    seller_shipping: record.sellerShipping,
-    total_fee: record.totalFee,
-    discount_price: record.discountPrice,
-    list_price: record.listPrice,
-    profit_rate: record.profitRate,
-    net_profit: record.netProfit,
-    revenue: record.revenue,
-    shipping_default: record.shippingDefault,
-    activity_fee: record.activityFee,
-    transaction_fee: record.transactionFee,
-    commission_fee: record.commissionFee,
-    withdraw_fee: record.withdrawFee,
-    exchange_loss_fee: record.exchangeLossFee,
-    tax_fee: record.taxFee,
-    label_fee: record.labelFee,
-    fixed_surcharge: record.fixedSurcharge,
-    notes: record.notes,
     cover_image_id: record.coverImageId,
     variant_summary: record.variantSummary,
     preset_snapshot_json: record.presetSnapshotJson,
@@ -399,40 +296,25 @@ function recordToInternalRow(record = {}) {
     created_at: record.createdAt,
     updated_at: record.updatedAt,
   }
+
+  listRecordFieldConfigs.forEach((config) => {
+    row[config.internalKey] = record[config.recordKey]
+  })
+
+  return row
 }
 
 function recordToSheetRow(record = {}) {
-  return {
-    "名称": record.name,
-    "款号": record.sku,
-    "图片": "",
-    "变体": record.variantSummary,
-    "国家": record.country,
-    "平台": record.platform,
-    "类目": record.category,
-    "广告类型": record.adType,
-    "是否包邮": record.shippingIncluded,
-    "当前基准": record.currentBenchmark,
-    "成本": record.cost,
-    "重量(g)": record.weight,
-    "境内运费": record.sellerShipping,
-    "总费用(R$)": record.totalFee,
-    "折后价格(R$)": record.discountPrice,
-    "折前价格(R$)": record.listPrice,
-    "利润率": record.profitRate,
-    "净利润(R$)": record.netProfit,
-    "收入(R$)": record.revenue,
-    "预设是否包邮": record.shippingDefault,
-    "活动费": record.activityFee,
-    "交易费": record.transactionFee,
-    "佣金费": record.commissionFee,
-    "提现费": record.withdrawFee,
-    "汇损": record.exchangeLossFee,
-    "税费": record.taxFee,
-    "贴单费": record.labelFee,
-    "固定附加费": record.fixedSurcharge,
-    "备注": record.notes,
+  const row = {
+    图片: "",
+    变体: record.variantSummary,
   }
+
+  listRecordFieldConfigs.forEach((config) => {
+    row[config.mainHeader] = record[config.recordKey]
+  })
+
+  return row
 }
 
 function imageToSheetRow(image = {}) {
@@ -587,37 +469,11 @@ function applySheetBaseStyle(worksheet) {
 }
 
 function configureMainSheetColumns(worksheet) {
-  worksheet.columns = [
-    { header: "名称", key: "名称", width: 18 },
-    { header: "款号", key: "款号", width: 16 },
-    { header: "图片", key: "图片", width: 18 },
-    { header: "变体", key: "变体", width: 18 },
-    { header: "国家", key: "国家", width: 10 },
-    { header: "平台", key: "平台", width: 10 },
-    { header: "类目", key: "类目", width: 12 },
-    { header: "广告类型", key: "广告类型", width: 12 },
-    { header: "是否包邮", key: "是否包邮", width: 12 },
-    { header: "当前基准", key: "当前基准", width: 12 },
-    { header: "成本", key: "成本", width: 12 },
-    { header: "重量(g)", key: "重量(g)", width: 12 },
-    { header: "境内运费", key: "境内运费", width: 12 },
-    { header: "总费用(R$)", key: "总费用(R$)", width: 14 },
-    { header: "折后价格(R$)", key: "折后价格(R$)", width: 14 },
-    { header: "折前价格(R$)", key: "折前价格(R$)", width: 14 },
-    { header: "利润率", key: "利润率", width: 12 },
-    { header: "净利润(R$)", key: "净利润(R$)", width: 14 },
-    { header: "收入(R$)", key: "收入(R$)", width: 12 },
-    { header: "预设是否包邮", key: "预设是否包邮", width: 14 },
-    { header: "活动费", key: "活动费", width: 12 },
-    { header: "交易费", key: "交易费", width: 12 },
-    { header: "佣金费", key: "佣金费", width: 12 },
-    { header: "提现费", key: "提现费", width: 12 },
-    { header: "汇损", key: "汇损", width: 12 },
-    { header: "税费", key: "税费", width: 12 },
-    { header: "贴单费", key: "贴单费", width: 12 },
-    { header: "固定附加费", key: "固定附加费", width: 14 },
-    { header: "备注", key: "备注", width: 20 },
-  ]
+  worksheet.columns = listMainSheetColumnConfigs.map(config => ({
+    header: config.header,
+    key: config.key || config.header,
+    width: config.width,
+  }))
 }
 
 function appendJsonRows(worksheet, rows = [], columns = []) {

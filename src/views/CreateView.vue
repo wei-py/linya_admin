@@ -5,10 +5,14 @@ import { storeToRefs } from "pinia"
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue"
 
 import {
+  createCalculationDriverFieldConfigs,
   createCalculationInputFields,
+  createFeeSummaryConfigs,
   createPresetFieldDefinitions,
   createPresetSummaryFieldConfigs,
+  createPrimaryResultHighlightConfigs,
   createProductBaseFields,
+  createResultSummaryConfigs,
 } from "@/constants/create"
 import { booleanValueOptions } from "@/constants/preset"
 import { useListStore } from "@/stores/list"
@@ -1061,6 +1065,18 @@ function findCreatePresetFieldName(key) {
   return createPresetFieldDefinitions[key]?.name || ""
 }
 
+function getOptionBackedFieldLabel(formKey, fallback = "") {
+  return findOptionBackedFieldByFormKey(formKey)?.fieldName || fallback
+}
+
+const shippingIncludedFieldLabel = computed(() =>
+  getOptionBackedFieldLabel("shippingIncluded", "是否包邮"),
+)
+
+const shippingRuleFieldLabel = computed(() =>
+  findCreatePresetFieldName("shippingRule") || "卖家支付运费",
+)
+
 function lookupTemplateTableValue(tableId, args = []) {
   const table = templateTables.value.find(item => item.id === tableId)
 
@@ -1272,15 +1288,11 @@ const calculationSnapshot = computed(() => {
 })
 
 function getCalculationDriverLabel() {
-  return calculationDriver.value === "discountPrice"
-    ? "折后售价"
-    : calculationDriver.value === "revenue"
-      ? "收入"
-      : calculationDriver.value === "profitRate"
-        ? "利润率"
-        : calculationDriver.value === "netProfit"
-          ? "净利润"
-          : "折前价格"
+  return (
+    createCalculationDriverFieldConfigs.find(
+      field => field.key === calculationDriver.value,
+    )?.label || "折前价格"
+  )
 }
 
 function addCurrentProductToList() {
@@ -1301,136 +1313,70 @@ const moneyUnitSuffix = computed(() =>
   findPresetMoneyUnit() ? ` ${findPresetMoneyUnit()}` : "",
 )
 
-const primaryResultHighlights = computed(() => [
-  {
-    label: "净利润",
-    value: formatNumber(
-      calculationSnapshot.value.netProfit,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "利润率",
-    value: formatNumber(calculationSnapshot.value.profitRate, " %"),
-  },
-])
+function formatCreateSummaryValue(config) {
+  if (config.valueKey === "countryPlatform") {
+    return form.country && form.platform
+      ? `${form.country} / ${form.platform}`
+      : "未选择"
+  }
 
-const resultSummaryItems = computed(() => [
-  {
-    label: "组合",
-    value:
-      form.country && form.platform
-        ? `${form.country} / ${form.platform}`
-        : "未选择",
-  },
-  {
-    label: "当前基准",
-    value: calculationDriverText.value,
-  },
-  {
-    label: "折前价",
-    value: formatNumber(
-      calculationSnapshot.value.listPrice,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "折后价",
-    value: formatNumber(
-      calculationSnapshot.value.discountPrice,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "收入",
-    value: formatNumber(
-      calculationSnapshot.value.revenue,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "总费用",
-    value: formatNumber(
-      calculationSnapshot.value.totalFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "商品是否包邮",
-    value: calculationSnapshot.value.shippingIncluded,
-  },
-  {
-    label: "预设是否包邮",
-    value: calculationSnapshot.value.shippingDefault,
-  },
-])
+  if (config.valueKey === "currentBenchmark") {
+    return calculationDriverText.value
+  }
 
-const feeSummaryItems = computed(() => [
-  {
-    label: "活动费",
-    value: formatNumber(
-      calculationSnapshot.value.activityFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "交易费",
-    value: formatNumber(
-      calculationSnapshot.value.transactionFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "提现费",
-    value: formatNumber(
-      calculationSnapshot.value.withdrawFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "汇损金额",
-    value: formatNumber(
-      calculationSnapshot.value.exchangeLossFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "税费",
-    value: formatNumber(
-      calculationSnapshot.value.taxFee,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "贴单费",
-    value: formatNumber(
-      calculationSnapshot.value.labelFee,
-      findPresetSnapshotUnit(findCreatePresetFieldName("labelFee"))
-        ? ` ${findPresetSnapshotUnit(findCreatePresetFieldName("labelFee"))}`
-        : moneyUnitSuffix.value
-          ? moneyUnitSuffix.value
-          : "",
-    ),
-  },
-  {
-    label: "卖家运费",
-    value: formatNumber(
-      calculationSnapshot.value.sellerShipping,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "固定附加",
-    value: formatNumber(
-      calculationSnapshot.value.fixedSurcharge,
-      moneyUnitSuffix.value,
-    ),
-  },
-  {
-    label: "成本",
-    value: formatNumber(toNumber(form.cost), moneyUnitSuffix.value),
-  },
-])
+  const value = config.snapshotKey
+    ? calculationSnapshot.value[config.snapshotKey]
+    : config.formKey
+      ? form[config.formKey]
+      : ""
+
+  if (config.valueType === "percent") {
+    return formatNumber(value, " %")
+  }
+
+  if (config.valueType === "money") {
+    const unitSuffix = config.unitPresetFieldKey
+      ? findPresetSnapshotUnit(
+          findCreatePresetFieldName(config.unitPresetFieldKey),
+        )
+      : ""
+
+    return formatNumber(
+      value,
+      unitSuffix ? ` ${unitSuffix}` : moneyUnitSuffix.value,
+    )
+  }
+
+  return value || "未设置"
+}
+
+const primaryResultHighlights = computed(() =>
+  createPrimaryResultHighlightConfigs.map(config => ({
+    label: config.label,
+    value: formatCreateSummaryValue(config),
+  })),
+)
+
+const resultSummaryItems = computed(() =>
+  [
+    {
+      label: "组合",
+      valueKey: "countryPlatform",
+      valueType: "plain",
+    },
+    ...createResultSummaryConfigs,
+  ].map(config => ({
+    label: config.label,
+    value: formatCreateSummaryValue(config),
+  })),
+)
+
+const feeSummaryItems = computed(() =>
+  createFeeSummaryConfigs.map(config => ({
+    label: config.label,
+    value: formatCreateSummaryValue(config),
+  })),
+)
 
 const calculationProcessSections = computed(() => {
   const snapshot = calculationSnapshot.value
@@ -1502,8 +1448,10 @@ const calculationProcessSections = computed(() => {
     = shippingLookupMeta.value.mode === "free_shipping"
       ? {
           label: "卖家运费",
-          formula: "若商品是否包邮 = 是，则卖家运费 = 0",
-          detail: `商品是否包邮为“是”，所以卖家运费 = ${formatProcessValue(0, money)}`,
+          formula: `若当前${shippingIncludedFieldLabel.value} = 是，则卖家运费 = 0`,
+          detail:
+            `当前${shippingIncludedFieldLabel.value}为“是”，`
+            + `所以卖家运费 = ${formatProcessValue(0, money)}`,
         }
       : shippingLookupMeta.value.mode === "table_lookup"
         ? {
@@ -1521,7 +1469,9 @@ const calculationProcessSections = computed(() => {
         : {
             label: "卖家运费",
             formula: "未命中有效规则时，卖家运费按 0 处理",
-            detail: `当前没有可用的“卖家支付运费”规则，结果 = ${formatProcessValue(0, money)}`,
+            detail:
+              `当前没有可用的“${shippingRuleFieldLabel.value}”规则，`
+              + `结果 = ${formatProcessValue(0, money)}`,
           }
 
   return [
