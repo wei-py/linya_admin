@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Linya Admin",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.weipy.linyaadmin",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
